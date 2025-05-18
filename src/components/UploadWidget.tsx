@@ -6,6 +6,8 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/providers/AuthProvider';
 import { v4 as uuidv4 } from 'uuid';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { format } from 'date-fns';
 
 interface UploadWidgetProps {
   onComplete: () => void;
@@ -21,9 +23,37 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
   const [processingResult, setProcessingResult] = useState<string | null>(null);
   const [processingError, setProcessingError] = useState<string | null>(null);
   const [processingTimeout, setProcessingTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
+  
+  // Generate available months for the last 2 years
+  const getAvailableMonths = () => {
+    const months = [];
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    
+    // Add months for current year and 2 previous years
+    for (let year = currentYear; year >= currentYear - 2; year--) {
+      for (let month = 12; month >= 1; month--) {
+        // Format month to ensure two digits (01, 02, etc.)
+        const formattedMonth = month.toString().padStart(2, '0');
+        const monthKey = `${year}-${formattedMonth}`;
+        
+        // Skip future months
+        const monthDate = new Date(year, month - 1);
+        if (monthDate > currentDate) continue;
+        
+        const monthName = format(monthDate, 'MMMM yyyy');
+        months.push({ key: monthKey, label: monthName });
+      }
+    }
+    
+    return months;
+  };
+  
+  const availableMonths = getAvailableMonths();
   
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
@@ -157,7 +187,6 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
         toast({
           title: "CSV format warning",
           description: "File may not contain properly formatted transaction data. Processing will be attempted anyway.",
-          // Changed from "warning" to "default" since "warning" is not a supported variant
           variant: "default",
         });
         // We return true anyway and let the backend try to process it
@@ -191,6 +220,15 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
       toast({
         title: "No files selected",
         description: "Please select or drop files to upload.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!selectedMonth) {
+      toast({
+        title: "Month not selected",
+        description: "Please select the statement month and year.",
         variant: "destructive",
       });
       return;
@@ -286,7 +324,8 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
           .insert({
             user_id: user.id,
             filename: file.name,
-            file_path: filePath
+            file_path: filePath,
+            statement_month: selectedMonth // Store the selected month
           })
           .select()
           .single();
@@ -302,13 +341,14 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
         
         // Process the file through our edge function
         setStatus(`Processing file ${file.name}...`);
-        console.log(`Processing file ${uploadData.id} for user ${user.id}`);
+        console.log(`Processing file ${uploadData.id} for user ${user.id} for month ${selectedMonth}`);
         
         try {
           const { data, error: processError } = await supabase.functions.invoke('process-statement', {
             body: {
               fileId: uploadData.id,
-              userId: user.id
+              userId: user.id,
+              statementMonth: selectedMonth // Pass the selected month to the edge function
             }
           });
           
@@ -354,7 +394,7 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
       setStatus(`Processing complete!`);
       
       const resultMessage = totalTransactionsImported > 0 
-        ? `Successfully imported ${totalTransactionsImported} transactions from ${uploads.length} file${uploads.length !== 1 ? 's' : ''}.`
+        ? `Successfully imported ${totalTransactionsImported} transactions from ${uploads.length} file${uploads.length !== 1 ? 's' : ''} for ${format(new Date(selectedMonth + '-01'), 'MMMM yyyy')}.`
         : `Processed ${uploads.length} file${uploads.length !== 1 ? 's' : ''}, but no transactions were imported. Please check the file formats.`;
       
       setProcessingResult(resultMessage);
@@ -437,62 +477,83 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
         
         <CardContent>
           {!isUploading ? (
-            <div 
-              className={`border-2 border-dashed rounded-lg p-8 text-center ${
-                isDragging 
-                  ? 'border-income-dark bg-income-light/10' 
-                  : 'border-gray-300 hover:border-income'
-              }`}
-              onDragEnter={handleDragEnter}
-              onDragLeave={handleDragLeave}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-            >
-              <div className="flex flex-col items-center justify-center space-y-4">
-                <svg 
-                  className={`h-16 w-16 ${isDragging ? 'text-income-dark' : 'text-gray-400'}`} 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  fill="none" 
-                  viewBox="0 0 24 24" 
-                  stroke="currentColor"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={1.5} 
-                    d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" 
-                  />
-                </svg>
-                
-                <div>
-                  <p className="mb-2 text-lg font-semibold">
-                    {isDragging ? 'Drop files here' : 'Drag & Drop Files Here'}
-                  </p>
-                  <p className="text-sm text-gray-500">or</p>
-                  <Button 
-                    variant="outline"
-                    className="mt-2"
-                    onClick={() => fileInputRef.current?.click()}
+            <>
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1">Statement Month</label>
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select month" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableMonths.map(month => (
+                      <SelectItem key={month.key} value={month.key}>
+                        {month.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Select the month and year this statement covers
+                </p>
+              </div>
+
+              <div 
+                className={`border-2 border-dashed rounded-lg p-8 text-center ${
+                  isDragging 
+                    ? 'border-income-dark bg-income-light/10' 
+                    : 'border-gray-300 hover:border-income'
+                }`}
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+              >
+                <div className="flex flex-col items-center justify-center space-y-4">
+                  <svg 
+                    className={`h-16 w-16 ${isDragging ? 'text-income-dark' : 'text-gray-400'}`} 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
                   >
-                    Browse Files
-                  </Button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="hidden"
-                    accept=".pdf,.csv,.tsv,.txt"
-                    multiple
-                    onChange={handleFileInputChange}
-                  />
-                  <p className="mt-2 text-xs text-gray-500">
-                    Supported formats: PDF, CSV, TSV, TXT
-                  </p>
-                  <p className="mt-1 text-xs text-gray-500">
-                    CSV format should have date, description, and either amount or withdrawal/deposit columns
-                  </p>
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth={1.5} 
+                      d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" 
+                    />
+                  </svg>
+                  
+                  <div>
+                    <p className="mb-2 text-lg font-semibold">
+                      {isDragging ? 'Drop files here' : 'Drag & Drop Files Here'}
+                    </p>
+                    <p className="text-sm text-gray-500">or</p>
+                    <Button 
+                      variant="outline"
+                      className="mt-2"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      Browse Files
+                    </Button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.csv,.tsv,.txt"
+                      multiple
+                      onChange={handleFileInputChange}
+                    />
+                    <p className="mt-2 text-xs text-gray-500">
+                      Supported formats: PDF, CSV, TSV, TXT
+                    </p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      CSV format should have date, description, and either amount or withdrawal/deposit columns
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
+            </>
           ) : (
             <div className="py-8 space-y-6">
               <p className="text-center font-medium">{status || "Processing files..."}</p>

@@ -51,6 +51,7 @@ export type DatabaseWithTables = Database & {
           uploaded_at: string;
           file_path: string;
           processed: boolean;
+          statement_month: string | null;
         };
         Insert: {
           id?: string;
@@ -59,6 +60,7 @@ export type DatabaseWithTables = Database & {
           file_path: string;
           uploaded_at?: string;
           processed?: boolean;
+          statement_month?: string | null;
         };
         Update: {
           id?: string;
@@ -67,6 +69,7 @@ export type DatabaseWithTables = Database & {
           file_path?: string;
           uploaded_at?: string;
           processed?: boolean;
+          statement_month?: string | null;
         };
       };
     };

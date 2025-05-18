@@ -390,8 +390,8 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    const { fileId, userId } = await req.json();
-    console.log("Processing file", { fileId, userId });
+    const { fileId, userId, statementMonth } = await req.json();
+    console.log("Processing file", { fileId, userId, statementMonth });
     
     if (!fileId || !userId) {
       console.error("Missing required parameters");
@@ -400,6 +400,9 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    
+    // Use the provided statement month or get it from the upload record
+    let monthKey = statementMonth;
     
     const { data: uploadData, error: uploadError } = await supabase
       .from('uploads')
@@ -416,7 +419,20 @@ serve(async (req) => {
       );
     }
     
-    console.log("Found upload record", { filename: uploadData.filename });
+    console.log("Found upload record", { filename: uploadData.filename, statement_month: uploadData.statement_month });
+    
+    // If statement_month exists in uploadData, use it
+    if (!monthKey && uploadData.statement_month) {
+      monthKey = uploadData.statement_month;
+    }
+    
+    // If still not available, use current month as fallback
+    if (!monthKey) {
+      const now = new Date();
+      monthKey = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+    }
+    
+    console.log("Using month key:", monthKey);
     
     const { data: fileData, error: fileError } = await supabase
       .storage
@@ -463,10 +479,8 @@ serve(async (req) => {
             category = 'Income';
           } else {
             // For expenses, pass a negative value to ensure proper categorization
-            category = categorizeTransaction(description, -1);
+            category = categorizeTransaction(description, amount);
           }
-          
-          const monthKey = date.substring(0, 7);
           
           transactions.push({
             user_id: userId,
@@ -475,7 +489,7 @@ serve(async (req) => {
             amount: Math.abs(amount),
             type,
             category,
-            month_key: monthKey,
+            month_key: monthKey, // Use the provided or retrieved month key
             source_upload_id: fileId
           });
           
@@ -595,7 +609,6 @@ serve(async (req) => {
           
           console.log(`Line ${i+1}: Processing withdrawal: "${withdrawalStr}", deposit: "${depositStr}"`);
           
-          // Fixed: Correctly determine transaction type based on which column has a value
           if (withdrawalStr && withdrawalStr !== '' && withdrawalStr !== '0' && withdrawalStr !== '0.00') {
             // It's a withdrawal (expense)
             amount = parseAmount(withdrawalStr);
@@ -670,8 +683,6 @@ serve(async (req) => {
         
         console.log(`Line ${i+1}: Determined category: ${category} for description: ${description}`);
         
-        const monthKey = date.substring(0, 7);
-        
         console.log(`Line ${i+1}: Adding transaction: ${date} | ${description} | ${amount} | ${type} | ${category}`);
         
         transactions.push({
@@ -681,7 +692,7 @@ serve(async (req) => {
           amount,
           type,
           category,
-          month_key: monthKey,
+          month_key: monthKey, // Use the provided or retrieved month key
           source_upload_id: fileId
         });
         
