@@ -1,6 +1,6 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { parsePdf } from "https://esm.sh/pdf-parse@1.1.1";
 
 // Define common expense categories for classification
 const categories = {
@@ -184,6 +184,143 @@ function looksLikeTransactionLine(line: string): boolean {
   return false;
 }
 
+// New function to extract data from PDF files
+async function extractTransactionsFromPDF(buffer: ArrayBuffer): Promise<{ date: string, description: string, amount: number }[]> {
+  try {
+    const data = await parsePdf(new Uint8Array(buffer));
+    const text = data.text;
+    console.log("PDF extracted text sample:", text.substring(0, 500));
+    
+    // Split the PDF text into lines
+    const lines = text.split('\n').filter(line => line.trim());
+    
+    // Look for patterns that might indicate transaction data
+    // Common patterns: date (MM/DD/YYYY), description, amount ($XX.XX)
+    const transactions: { date: string, description: string, amount: number }[] = [];
+    
+    // Try to detect what type of bank statement this is based on common formats
+    const containsDatePattern = /\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{2}-\d{2}/.test(text);
+    const containsAmountPattern = /\$\s*\d+\.\d{2}|-\$\s*\d+\.\d{2}|\(\$\s*\d+\.\d{2}\)|\d+\.\d{2}\s*(DR|CR)/.test(text);
+    
+    if (!containsDatePattern || !containsAmountPattern) {
+      console.log("PDF does not appear to contain standard transaction formats");
+      return transactions;
+    }
+
+    const dateRegexes = [
+      /(\d{1,2}\/\d{1,2}\/\d{2,4})/,           // MM/DD/YYYY
+      /(\d{4}-\d{2}-\d{2})/                    // YYYY-MM-DD
+    ];
+    
+    const amountRegexes = [
+      /\$\s*([\d,]+\.\d{2})/,                  // $XX.XX
+      /-\$\s*([\d,]+\.\d{2})/,                 // -$XX.XX
+      /\(\$\s*([\d,]+\.\d{2})\)/,              // ($XX.XX)
+      /([\d,]+\.\d{2})\s*DR/,                  // XX.XX DR
+      /([\d,]+\.\d{2})\s*CR/                   // XX.XX CR
+    ];
+    
+    // Process each line looking for transaction data
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i].trim();
+      
+      // Skip short lines that likely don't contain transaction data
+      if (line.length < 10) continue;
+      
+      // Try to extract date
+      let dateMatch = null;
+      for (const regex of dateRegexes) {
+        const match = line.match(regex);
+        if (match) {
+          dateMatch = match[1];
+          break;
+        }
+      }
+      
+      if (!dateMatch) continue;
+      
+      // If date found, try to extract amount from same line
+      let amountMatch = null;
+      let amountValue = 0;
+      let isNegative = false;
+      
+      for (const regex of amountRegexes) {
+        const match = line.match(regex);
+        if (match) {
+          amountMatch = match[1].replace(/,/g, '');
+          isNegative = regex.toString().includes('-') || 
+                       regex.toString().includes('\\(') || 
+                       regex.toString().includes('DR');
+          break;
+        }
+      }
+      
+      if (!amountMatch) {
+        // Try looking at the next line for the amount
+        if (i + 1 < lines.length) {
+          const nextLine = lines[i + 1].trim();
+          for (const regex of amountRegexes) {
+            const match = nextLine.match(regex);
+            if (match) {
+              amountMatch = match[1].replace(/,/g, '');
+              isNegative = regex.toString().includes('-') || 
+                           regex.toString().includes('\\(') || 
+                           regex.toString().includes('DR');
+              i++; // Skip the next line as we've used it
+              break;
+            }
+          }
+        }
+      }
+      
+      if (!amountMatch) continue;
+      
+      amountValue = parseFloat(amountMatch);
+      if (isNegative) amountValue = -amountValue;
+      
+      // Extract description - everything between date and amount
+      // or everything after date if we found amount on next line
+      let description = line;
+      
+      // Remove the date part
+      description = description.replace(dateMatch, '').trim();
+      
+      // Remove the amount part if on same line
+      if (line.includes(amountMatch)) {
+        description = description.replace(new RegExp('\\$?\\s*' + amountMatch.replace('.', '\\.') + '\\s*(DR|CR)?'), '').trim();
+      }
+      
+      // Clean up description - remove common prefixes/suffixes and extra spaces
+      description = description
+        .replace(/^\s*-\s*/, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+      
+      // If description is too short, try to combine with previous or next line
+      if (description.length < 3 && i > 0) {
+        description = lines[i - 1].trim();
+      }
+      
+      // If we have valid data, add to transactions
+      if (dateMatch && description && !isNaN(amountValue)) {
+        const formattedDate = parseDate(dateMatch);
+        
+        transactions.push({
+          date: formattedDate,
+          description: description || "Unknown transaction",
+          amount: amountValue
+        });
+      }
+    }
+    
+    console.log(`Extracted ${transactions.length} transactions from PDF`);
+    return transactions;
+  } catch (error) {
+    console.error("Error parsing PDF:", error);
+    return [];
+  }
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
@@ -255,139 +392,182 @@ serve(async (req) => {
     const isPDF = fileExt === 'pdf';
     const isTXT = fileExt === 'txt';
     
-    // Get file content as text
-    let text;
-    try {
-      text = await fileData.text();
-      console.log(`File type: ${fileExt}, size: ${text.length} bytes`);
-    } catch (error) {
-      console.error("Error reading file:", error);
-      return new Response(
-        JSON.stringify({ error: "Error reading file: " + error.message }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    
-    // Detect delimiter (comma, tab, or space)
-    let delimiter = ',';
-    if (isTSV) {
-      delimiter = '\t';
-    } else if (text.includes('\t')) {
-      delimiter = '\t';
-    } else if (!text.includes(',') && text.trim().split('\n')[0].includes(' ')) {
-      // If no commas but has spaces, might be space-delimited
-      delimiter = ' ';
-    }
-    
-    // Sample data for manual review in logs
-    const sampleLines = text.split('\n').slice(0, 10).join('\n');
-    console.log(`Sample data (first 10 lines):\n${sampleLines}`);
-    
-    // Split the file into lines
-    const lines = text.split('\n').map(line => line.trim()).filter(line => line);
-    console.log(`Processing ${lines.length} lines from ${isCSV ? "CSV" : isPDF ? "PDF" : "text"} file`);
-    
-    if (lines.length === 0) {
-      console.error("No data found in file");
-      return new Response(
-        JSON.stringify({ error: "No data found in file" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    
-    let validTransactionsCount = 0;
-    let skippedLinesCount = 0;
-    
-    // Check if first line looks like a header and detect column indices
-    let headerLine = lines[0];
-    let startIndex = 0;
-    let columnIndices = { dateIndex: 0, descriptionIndex: 1, amountIndex: 2 }; // Default
-    
-    // Detect if first line is a header
-    if (headerLine.toLowerCase().includes('date') || 
-        headerLine.toLowerCase().includes('description') || 
-        headerLine.toLowerCase().includes('amount')) {
-      columnIndices = detectHeaderColumns(headerLine);
-      startIndex = 1; // Skip header row when processing
-      console.log("Using header line to determine columns:", headerLine);
-    } else {
-      console.log("No header detected, using default column order");
-    }
-    
-    // Process each line
-    for (let i = startIndex; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-      
-      let fields;
-      
-      // Handle different delimiters
-      if (delimiter === ',') {
-        if (line.includes('"')) {
-          fields = parseCSVLine(line);
-        } else {
-          fields = line.split(',').map(field => field.trim());
+    // Process PDF differently than text-based files
+    if (isPDF) {
+      try {
+        // For PDF files, we need to extract the text using pdf-parse
+        const arrayBuffer = await fileData.arrayBuffer();
+        const pdfTransactions = await extractTransactionsFromPDF(arrayBuffer);
+        
+        for (const tx of pdfTransactions) {
+          const { date, description, amount } = tx;
+          
+          // Determine if income or expense
+          const type = amount >= 0 ? 'income' : 'expense';
+          const category = categorizeTransaction(description, amount);
+          
+          // Extract YYYY-MM for month_key
+          const monthKey = date.substring(0, 7); // Format: YYYY-MM
+          
+          transactions.push({
+            user_id: userId,
+            date,
+            description,
+            amount,
+            type,
+            category,
+            month_key: monthKey,
+            source_upload_id: fileId
+          });
         }
-      } else if (delimiter === '\t') {
-        fields = line.split('\t').map(field => field.trim());
-      } else { // Space delimiter
-        // Split by multiple spaces to handle variable spacing
-        fields = line.split(/\s+/).filter(field => field.trim());
+        
+        console.log(`Processed ${transactions.length} transactions from PDF document`);
+      } catch (error) {
+        console.error("Error processing PDF:", error);
+        return new Response(
+          JSON.stringify({ 
+            error: "Error processing PDF document", 
+            details: error.message 
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    } else {
+      // Process CSV, TSV, or TXT files as before
+      // Get file content as text
+      let text;
+      try {
+        text = await fileData.text();
+        console.log(`File type: ${fileExt}, size: ${text.length} bytes`);
+      } catch (error) {
+        console.error("Error reading file:", error);
+        return new Response(
+          JSON.stringify({ error: "Error reading file: " + error.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
       
-      console.log(`Line ${i+1}: Fields detected:`, fields);
-      
-      // Skip if we don't have enough fields
-      if (!fields || fields.length < 3) {
-        console.log(`Skipping line ${i+1}: Not enough fields. Found: ${fields?.length || 0} fields`);
-        skippedLinesCount++;
-        continue;
+      // Detect delimiter (comma, tab, or space)
+      let delimiter = ',';
+      if (isTSV) {
+        delimiter = '\t';
+      } else if (text.includes('\t')) {
+        delimiter = '\t';
+      } else if (!text.includes(',') && text.trim().split('\n')[0].includes(' ')) {
+        // If no commas but has spaces, might be space-delimited
+        delimiter = ' ';
       }
       
-      const dateField = fields[columnIndices.dateIndex];
-      const descriptionField = fields[columnIndices.descriptionIndex];
-      const amountField = fields[columnIndices.amountIndex];
+      // Sample data for manual review in logs
+      const sampleLines = text.split('\n').slice(0, 10).join('\n');
+      console.log(`Sample data (first 10 lines):\n${sampleLines}`);
       
-      // Skip if any essential field is missing
-      if (!dateField || !descriptionField || !amountField) {
-        console.log(`Skipping line ${i+1}: Missing essential fields. Found: date=${dateField}, desc=${descriptionField}, amount=${amountField}`);
-        skippedLinesCount++;
-        continue;
+      // Split the file into lines
+      const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+      console.log(`Processing ${lines.length} lines from ${isCSV ? "CSV" : isPDF ? "PDF" : "text"} file`);
+      
+      if (lines.length === 0) {
+        console.error("No data found in file");
+        return new Response(
+          JSON.stringify({ error: "No data found in file" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
       
-      const date = parseDate(dateField);
-      const description = descriptionField.trim();
-      const amount = parseAmount(amountField);
+      let validTransactionsCount = 0;
+      let skippedLinesCount = 0;
       
-      if (amount === null) {
-        console.log(`Skipping line ${i+1} due to invalid amount: ${amountField}`);
-        skippedLinesCount++;
-        continue;
+      // Check if first line looks like a header and detect column indices
+      let headerLine = lines[0];
+      let startIndex = 0;
+      let columnIndices = { dateIndex: 0, descriptionIndex: 1, amountIndex: 2 }; // Default
+      
+      // Detect if first line is a header
+      if (headerLine.toLowerCase().includes('date') || 
+          headerLine.toLowerCase().includes('description') || 
+          headerLine.toLowerCase().includes('amount')) {
+        columnIndices = detectHeaderColumns(headerLine);
+        startIndex = 1; // Skip header row when processing
+        console.log("Using header line to determine columns:", headerLine);
+      } else {
+        console.log("No header detected, using default column order");
       }
       
-      // Determine if income or expense
-      const type = amount >= 0 ? 'income' : 'expense';
-      const category = categorizeTransaction(description, amount);
+      // Process each line
+      for (let i = startIndex; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        let fields;
+        
+        // Handle different delimiters
+        if (delimiter === ',') {
+          if (line.includes('"')) {
+            fields = parseCSVLine(line);
+          } else {
+            fields = line.split(',').map(field => field.trim());
+          }
+        } else if (delimiter === '\t') {
+          fields = line.split('\t').map(field => field.trim());
+        } else { // Space delimiter
+          // Split by multiple spaces to handle variable spacing
+          fields = line.split(/\s+/).filter(field => field.trim());
+        }
+        
+        console.log(`Line ${i+1}: Fields detected:`, fields);
+        
+        // Skip if we don't have enough fields
+        if (!fields || fields.length < 3) {
+          console.log(`Skipping line ${i+1}: Not enough fields. Found: ${fields?.length || 0} fields`);
+          skippedLinesCount++;
+          continue;
+        }
+        
+        const dateField = fields[columnIndices.dateIndex];
+        const descriptionField = fields[columnIndices.descriptionIndex];
+        const amountField = fields[columnIndices.amountIndex];
+        
+        // Skip if any essential field is missing
+        if (!dateField || !descriptionField || !amountField) {
+          console.log(`Skipping line ${i+1}: Missing essential fields. Found: date=${dateField}, desc=${descriptionField}, amount=${amountField}`);
+          skippedLinesCount++;
+          continue;
+        }
+        
+        const date = parseDate(dateField);
+        const description = descriptionField.trim();
+        const amount = parseAmount(amountField);
+        
+        if (amount === null) {
+          console.log(`Skipping line ${i+1} due to invalid amount: ${amountField}`);
+          skippedLinesCount++;
+          continue;
+        }
+        
+        // Determine if income or expense
+        const type = amount >= 0 ? 'income' : 'expense';
+        const category = categorizeTransaction(description, amount);
+        
+        // Extract YYYY-MM for month_key
+        const monthKey = date.substring(0, 7); // Format: YYYY-MM
+        
+        transactions.push({
+          user_id: userId,
+          date,
+          description,
+          amount,
+          type,
+          category,
+          month_key: monthKey,
+          source_upload_id: fileId
+        });
+        
+        validTransactionsCount++;
+        console.log(`Added transaction: ${date} | ${description} | ${amount} | ${type} | ${category}`);
+      }
       
-      // Extract YYYY-MM for month_key
-      const monthKey = date.substring(0, 7); // Format: YYYY-MM
-      
-      transactions.push({
-        user_id: userId,
-        date,
-        description,
-        amount,
-        type,
-        category,
-        month_key: monthKey,
-        source_upload_id: fileId
-      });
-      
-      validTransactionsCount++;
-      console.log(`Added transaction: ${date} | ${description} | ${amount} | ${type} | ${category}`);
+      console.log(`Parsed ${transactions.length} transactions (valid: ${validTransactionsCount}, skipped: ${skippedLinesCount})`);
     }
-    
-    console.log(`Parsed ${transactions.length} transactions (valid: ${validTransactionsCount}, skipped: ${skippedLinesCount})`);
     
     // Insert transactions in batches
     let insertedCount = 0;
@@ -425,12 +605,10 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Processed and inserted ${insertedCount} transactions out of ${transactions.length} parsed (${skippedLinesCount} lines skipped)`,
+        message: `Processed and inserted ${insertedCount} transactions out of ${transactions.length} parsed`,
         details: {
-          total_lines: lines.length,
-          valid_transactions: validTransactionsCount,
-          inserted_transactions: insertedCount,
-          skipped_lines: skippedLinesCount
+          total_transactions: transactions.length,
+          inserted_transactions: insertedCount
         }
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
