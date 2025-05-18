@@ -20,6 +20,7 @@ const Dashboard = () => {
   const { user, loading, signOut } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // Data states
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
@@ -246,6 +247,57 @@ const Dashboard = () => {
     await signOut();
     navigate('/auth');
   };
+
+  // New function to clear all transaction data
+  const handleClearData = async () => {
+    if (!user) return;
+    
+    try {
+      setIsDeleting(true);
+      
+      // Delete all transactions for the current user
+      const { error: transactionError } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('user_id', user.id);
+        
+      if (transactionError) throw transactionError;
+      
+      // Delete all uploads for the current user
+      const { error: uploadsError } = await supabase
+        .from('uploads')
+        .delete()
+        .eq('user_id', user.id);
+      
+      if (uploadsError) throw uploadsError;
+      
+      toast({
+        title: "Data cleared",
+        description: "All your transaction data has been removed. You can now upload new statements.",
+      });
+      
+      // Reset the states
+      setTransactions([]);
+      setCategoryData([]);
+      setMonthlyData([]);
+      setMonthSummary({
+        income: 0,
+        expenses: 0,
+        net: 0
+      });
+      
+      // Refresh available months
+      fetchAvailableMonths();
+    } catch (error: any) {
+      toast({
+        title: "Error clearing data",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
   
   if (loading) {
     return (
@@ -291,6 +343,13 @@ const Dashboard = () => {
                 className="bg-income hover:bg-income-dark"
               >
                 Upload Statements
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={handleClearData}
+                disabled={isDeleting}
+              >
+                {isDeleting ? "Clearing..." : "Clear Data"}
               </Button>
               <Button variant="outline" onClick={handleSignOut}>
                 Sign Out
