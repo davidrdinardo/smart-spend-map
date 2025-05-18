@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PieChartDisplay } from '@/components/PieChartDisplay';
 import { CategorySummary } from '@/types';
@@ -15,9 +15,17 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableRow,
+} from "@/components/ui/table";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from '@/components/ui/button';
-import { formatCurrency } from '@/utils/formatters';
+import { formatCurrency, formatDate } from '@/utils/formatters';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface CategoryBreakdownProps {
   categoryData: CategorySummary[];
@@ -26,6 +34,7 @@ interface CategoryBreakdownProps {
 export const CategoryBreakdownChart = ({ categoryData }: CategoryBreakdownProps) => {
   const [view, setView] = useState<'percentage' | 'amount'>('percentage');
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const { toast } = useToast();
   
   // Sort categories by amount spent (highest first)
   const sortedCategories = [...categoryData].sort((a, b) => b.amount - a.amount);
@@ -145,26 +154,74 @@ interface CategoryDetailProps {
 
 // Component to show detailed breakdown of a category
 const CategoryDetail = ({ category, totalAmount }: CategoryDetailProps) => {
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchCategoryTransactions = async () => {
+      setIsLoading(true);
+      try {
+        const { data: user } = await supabase.auth.getUser();
+        if (!user.user) return;
+
+        // Fetch the 3 most recent transactions for this category
+        const { data, error } = await supabase
+          .from('transactions')
+          .select('id, date, description, amount')
+          .eq('category', category)
+          .eq('user_id', user.user.id)
+          .order('date', { ascending: false })
+          .limit(3);
+
+        if (error) throw error;
+        setTransactions(data || []);
+      } catch (error: any) {
+        console.error('Error fetching category transactions:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load transaction details',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchCategoryTransactions();
+  }, [category, toast]);
+
   return (
     <div className="space-y-2">
       <h4 className="text-sm font-medium">{category} Breakdown</h4>
       <div className="text-xs text-muted-foreground">
         <p>Total spent: {formatCurrency(totalAmount)}</p>
-        <p className="mt-1">Last 3 transactions:</p>
-        <div className="mt-2 space-y-1">
-          <TransactionRow />
-        </div>
+        <p className="mt-1">Last {transactions.length > 0 ? transactions.length : 3} transactions:</p>
+        
+        {isLoading ? (
+          <div className="py-2 text-center">
+            <p className="text-xs">Loading...</p>
+          </div>
+        ) : transactions.length > 0 ? (
+          <Table className="mt-2">
+            <TableBody>
+              {transactions.map((tx) => (
+                <TableRow key={tx.id} className="text-xs border-b border-border/20">
+                  <TableCell className="py-1 px-2">{formatDate(tx.date)}</TableCell>
+                  <TableCell className="py-1 px-2">{tx.description}</TableCell>
+                  <TableCell className="py-1 px-2 text-right font-medium">
+                    {formatCurrency(tx.amount)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <p className="text-xs italic mt-2">
+            No recent transactions found for this category.
+          </p>
+        )}
       </div>
     </div>
   );
 };
-
-// Placeholder component - will be replaced with real transaction data
-const TransactionRow = () => {
-  return (
-    <p className="text-xs italic">
-      Click "Explore {'>'}{'>'} in the main dashboard to see detailed transactions for this category.
-    </p>
-  );
-};
-
