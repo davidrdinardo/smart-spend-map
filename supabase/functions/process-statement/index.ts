@@ -454,6 +454,7 @@ serve(async (req) => {
           
           const type = amount >= 0 ? 'income' : 'expense';
           
+          // FIX: Properly apply categorization for expenses
           const category = type === 'income' ? 'Income' : categorizeTransaction(description, amount);
           
           const monthKey = date.substring(0, 7);
@@ -649,7 +650,8 @@ serve(async (req) => {
         
         console.log(`Line ${i+1}: Transaction type: ${type}`);
         
-        const category = type === 'income' ? 'Income' : categorizeTransaction(description, amount);
+        // FIX: Properly categorize transactions based on type and description
+        const category = type === 'income' ? 'Income' : categorizeTransaction(description, -1); // Pass -1 to ensure it's treated as an expense for categorization
         
         const monthKey = date.substring(0, 7);
         
