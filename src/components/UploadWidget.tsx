@@ -21,6 +21,7 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
   const [status, setStatus] = useState<string>('');
   const [processingResult, setProcessingResult] = useState<string | null>(null);
   const [processingError, setProcessingError] = useState<string | null>(null);
+  const [processingTimeout, setProcessingTimeout] = useState<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -101,7 +102,8 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
       
       // Check if the file contains essential data columns
       const firstLine = lines[0].toLowerCase();
-      const hasHeader = firstLine.includes('date') || firstLine.includes('desc') || firstLine.includes('amount');
+      const hasHeader = firstLine.includes('date') || firstLine.includes('desc') || firstLine.includes('amount') || 
+                        firstLine.includes('withdraw') || firstLine.includes('deposit');
       
       // If no header, ensure we have at least 3 fields in the first line
       if (!hasHeader) {
@@ -152,6 +154,18 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
     setIsUploading(true);
     setProcessingResult(null);
     
+    // Clear any existing timeout
+    if (processingTimeout) {
+      clearTimeout(processingTimeout);
+    }
+    
+    // Set a timeout to show an error message if processing takes too long
+    const timeout = setTimeout(() => {
+      setProcessingError("Processing is taking longer than expected. Please check console logs for details.");
+    }, 60000); // 60 seconds timeout
+    
+    setProcessingTimeout(timeout);
+    
     try {
       // Create a storage bucket if it doesn't exist
       try {
@@ -192,6 +206,7 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
           if (!isValid) {
             setProcessingError(`File ${file.name} has invalid format. Upload canceled.`);
             setIsUploading(false);
+            if (processingTimeout) clearTimeout(processingTimeout);
             return;
           }
         }
@@ -291,6 +306,12 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
       
       setProcessingResult(resultMessage);
       
+      // Clear the timeout as processing is complete
+      if (processingTimeout) {
+        clearTimeout(processingTimeout);
+        setProcessingTimeout(null);
+      }
+      
       // Wait a moment to show 100% progress
       await new Promise(resolve => setTimeout(resolve, 1500));
       
@@ -309,6 +330,12 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
         });
       }
     } catch (error: any) {
+      // Clear timeout if there's an error
+      if (processingTimeout) {
+        clearTimeout(processingTimeout);
+        setProcessingTimeout(null);
+      }
+      
       toast({
         title: "Upload failed",
         description: error.message,
@@ -322,6 +349,26 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
   
   const removeFile = (index: number) => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+  
+  // This function handles cancellation properly
+  const handleCancel = () => {
+    // Clear any running timeout
+    if (processingTimeout) {
+      clearTimeout(processingTimeout);
+      setProcessingTimeout(null);
+    }
+    
+    // Reset state
+    setIsUploading(false);
+    setUploadedFiles([]);
+    setProcessingResult(null);
+    setProcessingError(null);
+    setUploadProgress(0);
+    setStatus('');
+    
+    // Call the parent's onCancel
+    onCancel();
   };
   
   return (
@@ -451,7 +498,7 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
         <CardFooter className="flex justify-between">
           <Button 
             variant="outline" 
-            onClick={onCancel} 
+            onClick={handleCancel} 
             disabled={isUploading}
           >
             Cancel
