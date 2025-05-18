@@ -1,7 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import * as pdfParse from "https://esm.sh/pdf-parse@1.1.1";
 
 // Define common expense categories for classification
 const categories = {
@@ -185,12 +184,79 @@ function looksLikeTransactionLine(line: string): boolean {
   return false;
 }
 
-// New function to extract data from PDF files
+// New function to extract PDF text (without using pdf-parse which has compatibility issues)
+async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
+  try {
+    // This is a very simplified PDF text extraction
+    // Converting the buffer to a string to find text patterns
+    const uint8Array = new Uint8Array(pdfBuffer);
+    const textDecoder = new TextDecoder('utf-8');
+    let text = '';
+    
+    // Look for text objects in PDF
+    // This is a simplified approach that won't work for all PDFs
+    // but should extract some text from simple PDF files
+    const str = textDecoder.decode(uint8Array);
+    
+    // Find text objects between "BT" (Begin Text) and "ET" (End Text)
+    const textMarkers = str.match(/BT.*?ET/gs);
+    if (textMarkers && textMarkers.length > 0) {
+      // Extract text content from these markers
+      for (const marker of textMarkers) {
+        // Look for text within parentheses or angle brackets
+        const textMatches = marker.match(/\((.*?)\)|\<(.*?)\>/g);
+        if (textMatches) {
+          for (const match of textMatches) {
+            // Clean up the extracted text
+            const cleaned = match.replace(/^\(|\)$|^\<|\>$/g, '');
+            text += cleaned + ' ';
+          }
+        }
+      }
+    }
+    
+    // If we couldn't extract text using the marker approach, try a fallback
+    if (text.trim().length === 0) {
+      // Look for common patterns that might indicate transaction data
+      const datePattern = /\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{2}-\d{2}/g;
+      const amountPattern = /\$\s*[\d,]+\.\d{2}|-\$\s*[\d,]+\.\d{2}|\([\d,]+\.\d{2}\)|\d+\.\d{2}\s*DR|\d+\.\d{2}\s*CR/g;
+      
+      const dates = str.match(datePattern) || [];
+      const amounts = str.match(amountPattern) || [];
+      
+      // If we found dates and amounts, construct some text with them
+      if (dates.length > 0 && amounts.length > 0) {
+        // Try to locate text near dates and amounts to use as descriptions
+        for (let i = 0; i < Math.min(dates.length, amounts.length); i++) {
+          const datePos = str.indexOf(dates[i]);
+          const amountPos = str.indexOf(amounts[i]);
+          
+          // Try to extract some context around these positions
+          if (datePos >= 0 && amountPos >= 0) {
+            const startPos = Math.max(0, datePos - 20);
+            const endPos = Math.min(str.length, amountPos + amounts[i].length + 20);
+            
+            if (startPos < endPos) {
+              text += str.substring(startPos, endPos) + '\n';
+            }
+          }
+        }
+      }
+    }
+    
+    console.log("Extracted text sample:", text.substring(0, 500));
+    return text;
+  } catch (error) {
+    console.error("Error extracting text from PDF:", error);
+    return "";
+  }
+}
+
+// Updated function to extract data from PDF files
 async function extractTransactionsFromPDF(buffer: ArrayBuffer): Promise<{ date: string, description: string, amount: number }[]> {
   try {
-    // Fixed import - use the default export from pdf-parse
-    const data = await pdfParse.default(new Uint8Array(buffer));
-    const text = data.text;
+    // Extract text from PDF using our simplified method
+    const text = await extractTextFromPDF(buffer);
     console.log("PDF extracted text sample:", text.substring(0, 500));
     
     // Split the PDF text into lines
@@ -397,7 +463,7 @@ serve(async (req) => {
     // Process PDF differently than text-based files
     if (isPDF) {
       try {
-        // For PDF files, we need to extract the text using pdf-parse
+        // For PDF files, use our custom extraction method
         const arrayBuffer = await fileData.arrayBuffer();
         const pdfTransactions = await extractTransactionsFromPDF(arrayBuffer);
         

@@ -151,6 +151,28 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
     setProcessingResult(null);
     
     try {
+      // Create a storage bucket if it doesn't exist
+      try {
+        const { data: bucketData, error: bucketError } = await supabase.storage.getBucket('bank_statements');
+        
+        if (bucketError && bucketError.message.includes('does not exist')) {
+          const { error: createError } = await supabase.storage.createBucket('bank_statements', {
+            public: false,
+            fileSizeLimit: 10485760, // 10MB
+          });
+          
+          if (createError) {
+            throw new Error(`Error creating storage bucket: ${createError.message}`);
+          }
+          
+          console.log("Created storage bucket 'bank_statements'");
+        }
+      } catch (bucketError: any) {
+        console.error("Error checking bucket:", bucketError);
+        // Continue even if there's an error checking/creating the bucket
+        // The upload will fail if the bucket doesn't exist
+      }
+      
       const uploads = [];
       let progressIncrement = 90 / uploadedFiles.length;
       let totalTransactionsImported = 0;
@@ -209,31 +231,40 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
         setStatus(`Processing file ${file.name}...`);
         console.log(`Processing file ${uploadData.id} for user ${user.id}`);
         
-        const { data, error: processError } = await supabase.functions.invoke('process-statement', {
-          body: {
-            fileId: uploadData.id,
-            userId: user.id
-          }
-        });
-        
-        if (processError) {
-          console.error(`Error processing file: ${processError.message}`);
-          toast({
-            title: "Processing warning",
-            description: `There was an issue processing ${file.name}. Some transactions may not be imported.`,
-            variant: "destructive",
+        try {
+          const { data, error: processError } = await supabase.functions.invoke('process-statement', {
+            body: {
+              fileId: uploadData.id,
+              userId: user.id
+            }
           });
-          // Continue with other files even if processing fails for one
-        } else {
-          console.log("Processing response:", data);
           
-          if (data?.details?.inserted_transactions) {
-            totalTransactionsImported += data.details.inserted_transactions;
+          if (processError) {
+            console.error(`Error processing file: ${processError.message}`);
+            toast({
+              title: "Processing warning",
+              description: `There was an issue processing ${file.name}. Some transactions may not be imported.`,
+              variant: "destructive",
+            });
+            // Continue with other files even if processing fails for one
+          } else {
+            console.log("Processing response:", data);
+            
+            if (data?.details?.inserted_transactions) {
+              totalTransactionsImported += data.details.inserted_transactions;
+            }
+            
+            toast({
+              title: "File processed",
+              description: `${data?.message || "File processed successfully"}`,
+            });
           }
-          
+        } catch (funcError: any) {
+          console.error(`Error calling function: ${funcError.message}`);
           toast({
-            title: "File processed",
-            description: `${data?.message || "File processed successfully"}`,
+            title: "Processing error",
+            description: `Error processing ${file.name}: ${funcError.message}`,
+            variant: "destructive",
           });
         }
       }
@@ -287,10 +318,29 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
                   ? 'border-income-dark bg-income-light/10' 
                   : 'border-gray-300 hover:border-income'
               }`}
-              onDragEnter={handleDragEnter}
-              onDragLeave={handleDragLeave}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
+              onDragEnter={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsDragging(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsDragging(false);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsDragging(false);
+                
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                  processFiles(e.dataTransfer.files);
+                }
+              }}
             >
               <div className="flex flex-col items-center justify-center space-y-4">
                 <svg 
@@ -326,7 +376,11 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
                     className="hidden"
                     accept=".pdf,.csv,.tsv,.txt"
                     multiple
-                    onChange={handleFileInputChange}
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        processFiles(e.target.files);
+                      }
+                    }}
                   />
                   <p className="mt-2 text-xs text-gray-500">
                     Supported formats: PDF, CSV, TSV, TXT
