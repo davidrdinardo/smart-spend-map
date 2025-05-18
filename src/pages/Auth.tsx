@@ -12,6 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const formSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -23,6 +24,8 @@ const Auth = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [showDebugDialog, setShowDebugDialog] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<any>({});
   const { user } = useAuth();
   
   // Redirect if already logged in
@@ -46,21 +49,25 @@ const Auth = () => {
     
     try {
       console.log("Auth attempt with email:", email);
+      setDebugInfo({ email, timestamp: new Date().toISOString() });
       
       if (isSignUp) {
         // Sign up logic
-        const { data, error } = await supabase.auth.signUp({
+        console.log("Attempting sign up...");
+        const { data: signupData, error } = await supabase.auth.signUp({
           email,
           password,
         });
         
         if (error) {
           console.error("Signup error:", error);
+          setDebugInfo(prev => ({...prev, error: { type: "signup", message: error.message, code: error.code }}));
           throw error;
         }
         
-        if (data?.user) {
-          console.log("Signup successful, user:", data.user.id);
+        if (signupData?.user) {
+          console.log("Signup successful, user:", signupData.user.id);
+          setDebugInfo(prev => ({...prev, success: { userId: signupData.user?.id }}));
           toast({
             title: "Sign up successful!",
             description: "Please check your email for the confirmation link.",
@@ -69,19 +76,21 @@ const Auth = () => {
       } else {
         // Sign in logic
         console.log("Attempting sign in...");
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { data: signinData, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         
         if (error) {
           console.error("Login error:", error);
+          setDebugInfo(prev => ({...prev, error: { type: "login", message: error.message, code: error.code }}));
           throw error;
         }
         
-        if (data?.user) {
-          console.log("Login successful, user:", data.user.id);
-          console.log("Session:", data.session);
+        if (signinData?.user) {
+          console.log("Login successful, user:", signinData.user.id);
+          console.log("Session:", signinData.session);
+          setDebugInfo(prev => ({...prev, success: { userId: signinData.user?.id, session: !!signinData.session }}));
           navigate('/dashboard');
         }
       }
@@ -157,6 +166,7 @@ const Auth = () => {
               >
                 {loading ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Sign In')}
               </Button>
+              
               <div className="text-center">
                 <button
                   type="button"
@@ -166,10 +176,36 @@ const Auth = () => {
                   {isSignUp ? 'Already have an account? Sign in' : 'Need an account? Sign up'}
                 </button>
               </div>
+              <div className="text-center mt-2">
+                <button
+                  type="button"
+                  className="text-xs text-gray-400 hover:underline"
+                  onClick={() => setShowDebugDialog(true)}
+                >
+                  Debug Info
+                </button>
+              </div>
             </form>
           </Form>
         </CardContent>
       </Card>
+      
+      <Dialog open={showDebugDialog} onOpenChange={setShowDebugDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Authentication Debug Info</DialogTitle>
+            <DialogDescription>
+              Technical details to help diagnose auth issues.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 bg-gray-50 p-4 rounded overflow-auto max-h-[300px]">
+            <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(debugInfo, null, 2)}</pre>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowDebugDialog(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -8,6 +8,7 @@ type AuthContextType = {
   user: User | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  refreshSession: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,6 +46,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log("Signing out...");
     await supabase.auth.signOut();
   };
+
+  const refreshSession = async () => {
+    try {
+      console.log("Manually refreshing session...");
+      const { data, error } = await supabase.auth.refreshSession();
+      
+      if (error) {
+        console.error("Session refresh error:", error);
+      } else {
+        console.log("Session refreshed:", data.session?.user?.id);
+        setSession(data.session);
+        setUser(data.session?.user ?? null);
+      }
+    } catch (error) {
+      console.error("Error during manual session refresh:", error);
+    }
+  };
   
   // For debugging
   useEffect(() => {
@@ -52,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, session, loading]);
   
   return (
-    <AuthContext.Provider value={{ session, user, loading, signOut }}>
+    <AuthContext.Provider value={{ session, user, loading, signOut, refreshSession }}>
       {children}
     </AuthContext.Provider>
   );

@@ -19,6 +19,23 @@ export const supabase = createClient<DatabaseWithTables>(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+      flowType: 'pkce'
     }
   }
 );
+
+// Add diagnostic helper to check auth state
+export const checkAuthState = async () => {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    console.log("Current auth state:", {
+      hasSession: !!data.session,
+      sessionExpiresAt: data.session?.expires_at,
+      error: error?.message
+    });
+    return { session: data.session, error };
+  } catch (err) {
+    console.error("Error checking auth state:", err);
+    return { session: null, error: err };
+  }
+};
