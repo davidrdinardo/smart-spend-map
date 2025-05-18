@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -60,12 +59,14 @@ const Dashboard = () => {
         .from('transactions')
         .select('month_key')
         .eq('user_id', user!.id)
-        .order('month_key', { ascending: false })
-        .distinct();
+        .order('month_key', { ascending: false });
         
       if (error) throw error;
       
-      if (data.length === 0) {
+      // Get distinct month keys
+      const uniqueMonthKeys = Array.from(new Set(data.map(item => item.month_key)));
+      
+      if (uniqueMonthKeys.length === 0) {
         // No data yet, just use current month
         setAvailableMonths([{
           key: format(new Date(), 'yyyy-MM'),
@@ -75,11 +76,11 @@ const Dashboard = () => {
       }
       
       // Format the month keys for display
-      const months = data.map(item => {
-        const [year, month] = item.month_key.split('-');
+      const months = uniqueMonthKeys.map(month_key => {
+        const [year, month] = month_key.split('-');
         const date = new Date(parseInt(year), parseInt(month) - 1);
         return {
-          key: item.month_key,
+          key: month_key,
           label: format(date, 'MMMM yyyy')
         };
       });

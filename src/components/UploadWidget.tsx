@@ -119,7 +119,7 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
           throw new Error(`Error uploading ${file.name}: ${uploadError.message}`);
         }
         
-        // Create record in uploads table
+        // Create record in uploads table with properly typed table name
         const { data: uploadData, error: dbError } = await supabase
           .from('uploads')
           .insert({
