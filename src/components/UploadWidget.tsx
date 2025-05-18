@@ -18,6 +18,7 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [status, setStatus] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -105,12 +106,14 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
       let progressIncrement = 90 / uploadedFiles.length;
       
       for (let i = 0; i < uploadedFiles.length; i++) {
+        setStatus(`Uploading file ${i+1} of ${uploadedFiles.length}`);
         const file = uploadedFiles[i];
         const fileExt = file.name.split('.').pop();
         const fileName = `${uuidv4()}.${fileExt}`;
         const filePath = `${user.id}/${fileName}`;
         
         // Upload to Supabase Storage
+        setStatus(`Uploading ${file.name} to storage...`);
         const { error: uploadError } = await supabase.storage
           .from('bank_statements')
           .upload(filePath, file);
@@ -119,7 +122,8 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
           throw new Error(`Error uploading ${file.name}: ${uploadError.message}`);
         }
         
-        // Create record in uploads table with properly typed table name
+        // Create record in uploads table
+        setStatus(`Recording upload in database...`);
         const { data: uploadData, error: dbError } = await supabase
           .from('uploads')
           .insert({
@@ -140,7 +144,8 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
         setUploadProgress((i + 1) * progressIncrement);
         
         // Process the file through our edge function
-        const { error: processError } = await supabase.functions.invoke('process-statement', {
+        setStatus(`Processing file ${file.name}...`);
+        const { data, error: processError } = await supabase.functions.invoke('process-statement', {
           body: {
             fileId: uploadData.id,
             userId: user.id
@@ -149,11 +154,23 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
         
         if (processError) {
           console.error(`Error processing file: ${processError.message}`);
+          toast({
+            title: "Processing warning",
+            description: `There was an issue processing ${file.name}. Some transactions may not be imported.`,
+            variant: "destructive",
+          });
           // Continue with other files even if processing fails for one
+        } else {
+          console.log("Processing response:", data);
+          toast({
+            title: "File processed",
+            description: `${data?.message || "File processed successfully"}`,
+          });
         }
       }
       
       setUploadProgress(100);
+      setStatus(`Finalizing...`);
       
       // Wait a moment to show 100% progress
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -245,7 +262,7 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
             </div>
           ) : (
             <div className="py-8 space-y-6">
-              <p className="text-center font-medium">Processing files...</p>
+              <p className="text-center font-medium">{status || "Processing files..."}</p>
               <Progress value={uploadProgress} className="h-2 w-full" />
               <p className="text-center text-sm text-gray-500">
                 {uploadProgress < 100 
