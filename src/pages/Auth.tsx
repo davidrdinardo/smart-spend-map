@@ -27,15 +27,18 @@ const Auth = () => {
   const [showDebugDialog, setShowDebugDialog] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>({});
   const [authError, setAuthError] = useState<string | null>(null);
-  const [user, setUser] = useState(null);
   
   // Check if user is already logged in
   useEffect(() => {
     const checkUser = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session?.user) {
-        setUser(data.session.user);
-        navigate('/dashboard');
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data.session?.user) {
+          console.log("User found, navigating to dashboard");
+          navigate('/dashboard');
+        }
+      } catch (error) {
+        console.error("Error checking user session:", error);
       }
     };
     
@@ -45,16 +48,20 @@ const Auth = () => {
   // Check auth state when component mounts
   useEffect(() => {
     const runAuthCheck = async () => {
-      const stateInfo = await checkAuthState();
-      console.log("Auth page initial state check:", stateInfo);
-      setDebugInfo(prev => ({
-        ...prev, 
-        initialCheck: {
-          timestamp: new Date().toISOString(),
-          hasSession: !!stateInfo.session,
-          sessionExpiresAt: stateInfo.session?.expires_at
-        }
-      }));
+      try {
+        const stateInfo = await checkAuthState();
+        console.log("Auth page initial state check:", stateInfo);
+        setDebugInfo(prev => ({
+          ...prev, 
+          initialCheck: {
+            timestamp: new Date().toISOString(),
+            hasSession: !!stateInfo.session,
+            sessionExpiresAt: stateInfo.session?.expires_at
+          }
+        }));
+      } catch (error) {
+        console.error("Error during initial auth check:", error);
+      }
     };
     
     runAuthCheck();
@@ -88,7 +95,7 @@ const Auth = () => {
           email,
           password,
           options: {
-            emailRedirectTo: window.location.origin + '/dashboard'
+            emailRedirectTo: `${window.location.origin}/dashboard`
           }
         });
         
@@ -178,16 +185,20 @@ const Auth = () => {
   const handleDebugClick = () => {
     // Update debug info with current state
     const getDebugInfo = async () => {
-      const authState = await checkAuthState();
-      setDebugInfo(prev => ({
-        ...prev,
-        currentState: {
-          timestamp: new Date().toISOString(),
-          localStorage: debugSupabaseSession(),
-          authState
-        }
-      }));
-      setShowDebugDialog(true);
+      try {
+        const authState = await checkAuthState();
+        setDebugInfo(prev => ({
+          ...prev,
+          currentState: {
+            timestamp: new Date().toISOString(),
+            localStorage: debugSupabaseSession(),
+            authState
+          }
+        }));
+        setShowDebugDialog(true);
+      } catch (error) {
+        console.error("Error getting debug info:", error);
+      }
     };
     
     getDebugInfo();
@@ -343,14 +354,18 @@ const Auth = () => {
             <Button 
               variant="outline"
               onClick={async () => {
-                const authState = await checkAuthState();
-                setDebugInfo(prev => ({
-                  ...prev,
-                  manualCheck: {
-                    timestamp: new Date().toISOString(),
-                    authState
-                  }
-                }));
+                try {
+                  const authState = await checkAuthState();
+                  setDebugInfo(prev => ({
+                    ...prev,
+                    manualCheck: {
+                      timestamp: new Date().toISOString(),
+                      authState
+                    }
+                  }));
+                } catch (error) {
+                  console.error("Error refreshing debug info:", error);
+                }
               }}
             >
               Refresh Info

@@ -1,8 +1,8 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase, checkAuthState, debugSupabaseSession } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
+import { supabase, checkAuthState } from '@/integrations/supabase/client';
+import { toast } from '@/components/ui/use-toast';
 
 type AuthContextType = {
   session: Session | null;
@@ -51,18 +51,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
     
     // Then check for existing session
-    supabase.auth.getSession().then(({ data: { session: currentSession }, error }) => {
-      console.log("Initial session check:", currentSession?.user?.id);
-      if (error) {
-        console.error("Error getting session:", error);
+    const getInitialSession = async () => {
+      try {
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+        console.log("Initial session check:", currentSession?.user?.id);
+        if (error) {
+          console.error("Error getting session:", error);
+        }
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        setLoading(false);
+      } catch (error) {
+        console.error("Exception during initial session check:", error);
+        setLoading(false);
       }
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      setLoading(false);
       
       // Run a diagnostic check
       checkAuthState();
-    });
+    };
+    
+    getInitialSession();
     
     return () => subscription.unsubscribe();
   }, []);
@@ -130,7 +138,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       userId: user?.id,
       userEmail: user?.email,
       loading,
-      localStorageData: debugSupabaseSession(),
     };
   };
   
