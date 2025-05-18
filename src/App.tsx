@@ -17,20 +17,14 @@ const queryClient = new QueryClient();
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
-  const [isRedirecting, setIsRedirecting] = useState(false);
-  
-  useEffect(() => {
-    // Only redirect if we've confirmed there's no user (loading is done)
-    if (!user && !loading) {
-      setIsRedirecting(true);
-    }
-  }, [user, loading]);
   
   // Show nothing during initial load to prevent flash
-  if (loading) return null;
+  if (loading) {
+    return null;
+  }
   
   // Redirect to auth if no user
-  if (isRedirecting) {
+  if (!user) {
     return <Navigate to="/auth" replace />;
   }
   
@@ -38,40 +32,51 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+// Public route - redirects to dashboard if already logged in
+const PublicRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading } = useAuth();
+  
+  // Show nothing during initial load
+  if (loading) {
+    return null;
+  }
+  
+  // Redirect to dashboard if already logged in
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  
+  // Show login page if not logged in
+  return <>{children}</>;
+};
+
 // The actual app with routing
 const AppRoutes = () => {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/auth" element={<Auth />} />
-        <Route 
-          path="/" 
-          element={
-            <AuthProvider>
-              <Index />
-            </AuthProvider>
-          } 
-        />
-        <Route 
-          path="/dashboard" 
-          element={
-            <AuthProvider>
+      <AuthProvider>
+        <Routes>
+          <Route 
+            path="/auth" 
+            element={
+              <PublicRoute>
+                <Auth />
+              </PublicRoute>
+            } 
+          />
+          <Route path="/" element={<Index />} />
+          <Route 
+            path="/dashboard" 
+            element={
               <ProtectedRoute>
                 <Dashboard />
               </ProtectedRoute>
-            </AuthProvider>
-          }
-        />
-        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-        <Route 
-          path="*" 
-          element={
-            <AuthProvider>
-              <NotFound />
-            </AuthProvider>
-          } 
-        />
-      </Routes>
+            }
+          />
+          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 };
