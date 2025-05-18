@@ -467,15 +467,19 @@ serve(async (req) => {
         const arrayBuffer = await fileData.arrayBuffer();
         const pdfTransactions = await extractTransactionsFromPDF(arrayBuffer);
         
+        console.log("PDF transactions extracted:", pdfTransactions.length);
+        
         for (const tx of pdfTransactions) {
           const { date, description, amount } = tx;
+          
+          console.log("Processing PDF transaction:", { date, description, amount });
           
           // Determine transaction type based on amount sign
           // Negative = expense, Positive = income
           const type = amount >= 0 ? 'income' : 'expense';
           
           // Categorize based on description and type
-          const category = type === 'income' ? 'Income' : categorizeTransaction(description, -1); // For expense categorization we pass -1
+          const category = type === 'income' ? 'Income' : categorizeTransaction(description, -1);
           
           // Extract YYYY-MM for month_key
           const monthKey = date.substring(0, 7); // Format: YYYY-MM
@@ -489,6 +493,14 @@ serve(async (req) => {
             category,
             month_key: monthKey,
             source_upload_id: fileId
+          });
+          
+          console.log("Added transaction:", {
+            date,
+            description,
+            amount: Math.abs(amount),
+            type,
+            category
           });
         }
         
@@ -510,6 +522,7 @@ serve(async (req) => {
       try {
         text = await fileData.text();
         console.log(`File type: ${fileExt}, size: ${text.length} bytes`);
+        console.log("File content sample:", text.substring(0, 500));
       } catch (error) {
         console.error("Error reading file:", error);
         return new Response(
@@ -528,6 +541,8 @@ serve(async (req) => {
         // If no commas but has spaces, might be space-delimited
         delimiter = ' ';
       }
+      
+      console.log("Detected delimiter:", delimiter === ',' ? "comma" : delimiter === '\t' ? "tab" : "space");
       
       // Sample data for manual review in logs
       const sampleLines = text.split('\n').slice(0, 10).join('\n');
@@ -617,15 +632,21 @@ serve(async (req) => {
           const withdrawalsIndex = headers.findIndex(h => h.includes('withdraw'));
           const depositsIndex = headers.findIndex(h => h.includes('deposit'));
           
+          console.log("Using separate columns:", { withdrawalsIndex, depositsIndex });
+          
           const withdrawalAmount = fields[withdrawalsIndex]?.trim();
           const depositAmount = fields[depositsIndex]?.trim();
+          
+          console.log("Checking amounts:", { withdrawalAmount, depositAmount });
           
           if (withdrawalAmount && withdrawalAmount !== '0' && withdrawalAmount !== '0.0' && withdrawalAmount !== '0.00') {
             amountField = withdrawalAmount;
             isExpense = true;
+            console.log(`Line ${i+1}: Found withdrawal amount: ${amountField}`);
           } else if (depositAmount && depositAmount !== '0' && depositAmount !== '0.0' && depositAmount !== '0.00') {
             amountField = depositAmount;
             isExpense = false;
+            console.log(`Line ${i+1}: Found deposit amount: ${amountField}`);
           } else {
             console.log(`Skipping line ${i+1}: No valid amount found in withdrawals/deposits`);
             skippedLinesCount++;
@@ -648,6 +669,8 @@ serve(async (req) => {
         const description = descriptionField.trim();
         const parsedAmount = parseAmount(amountField);
         
+        console.log(`Line ${i+1}: Parsed values:`, { date, description, parsedAmount });
+        
         if (parsedAmount === null) {
           console.log(`Skipping line ${i+1} due to invalid amount: ${amountField}`);
           skippedLinesCount++;
@@ -662,6 +685,8 @@ serve(async (req) => {
         // Determine if income or expense
         const type = isExpense ? 'expense' : 'income';
         
+        console.log(`Line ${i+1}: Transaction type: ${type} (isExpense: ${isExpense})`);
+        
         // Always use positive values in the database, the type field indicates whether it's an expense
         const amount = Math.abs(parsedAmount);
         
@@ -671,6 +696,8 @@ serve(async (req) => {
         
         // Extract YYYY-MM for month_key
         const monthKey = date.substring(0, 7); // Format: YYYY-MM
+        
+        console.log(`Line ${i+1}: Adding transaction: ${date} | ${description} | ${amount} | ${type} | ${category}`);
         
         transactions.push({
           user_id: userId,
@@ -684,7 +711,6 @@ serve(async (req) => {
         });
         
         validTransactionsCount++;
-        console.log(`Added transaction: ${date} | ${description} | ${amount} | ${type} | ${category}`);
       }
       
       console.log(`Parsed ${transactions.length} transactions (valid: ${validTransactionsCount}, skipped: ${skippedLinesCount})`);
@@ -696,9 +722,13 @@ serve(async (req) => {
       // Insert in smaller batches to avoid payload size issues
       const BATCH_SIZE = 20;
       
+      console.log(`Will insert ${transactions.length} transactions in batches of ${BATCH_SIZE}`);
+      
       for (let i = 0; i < transactions.length; i += BATCH_SIZE) {
         const batch = transactions.slice(i, i + BATCH_SIZE);
-        console.log(`Inserting batch ${i / BATCH_SIZE + 1} with ${batch.length} transactions`);
+        console.log(`Inserting batch ${Math.floor(i / BATCH_SIZE) + 1} with ${batch.length} transactions`);
+        
+        console.log("Sample transaction in batch:", batch[0]);
         
         const { data: insertData, error: insertError } = await supabase
           .from('transactions')
@@ -706,13 +736,15 @@ serve(async (req) => {
           .select();
           
         if (insertError) {
-          console.error(`Error inserting batch ${i / BATCH_SIZE + 1}:`, insertError);
+          console.error(`Error inserting batch ${Math.floor(i / BATCH_SIZE) + 1}:`, insertError);
           // Continue with other batches even if one fails
         } else {
           insertedCount += insertData?.length || 0;
           console.log(`Successfully inserted ${insertData?.length || 0} transactions`);
         }
       }
+    } else {
+      console.log("No transactions to insert");
     }
     
     // Mark the upload as processed
