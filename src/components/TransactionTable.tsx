@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Transaction } from '@/types';
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 
 interface TransactionTableProps {
   transactions: Transaction[];
@@ -27,12 +28,14 @@ interface TransactionTableProps {
 
 export const TransactionTable = ({ transactions, onUpdateCategory }: TransactionTableProps) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortField, setSortField] = useState<'date' | 'amount'>('date');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   
   // Define available categories for the dropdown
   const categories = [
     "Housing", "Transportation", "Groceries", "Dining Out", "Utilities", 
     "Subscriptions", "Healthcare", "Insurance", "Entertainment", 
-    "Travel", "Personal Care", "Gifts/Donations", "Savings/Investments", "Other"
+    "Travel", "Personal Care", "Gifts/Donations", "Savings", "Shopping", "Other"
   ];
   
   // Filter transactions based on search term
@@ -41,15 +44,38 @@ export const TransactionTable = ({ transactions, onUpdateCategory }: Transaction
     tx.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
   
+  // Sort transactions
+  const sortedTransactions = [...filteredTransactions].sort((a, b) => {
+    if (sortField === 'date') {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
+    } else {
+      return sortDirection === 'asc' ? a.amount - b.amount : b.amount - a.amount;
+    }
+  });
+  
+  const toggleSort = (field: 'date' | 'amount') => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+  
   return (
     <div>
-      <div className="mb-4">
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <Input
           placeholder="Search transactions..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="max-w-sm"
         />
+        <div className="text-sm text-muted-foreground">
+          {sortedTransactions.length} transaction{sortedTransactions.length !== 1 ? 's' : ''} found
+        </div>
       </div>
       
       {transactions.length === 0 && (
@@ -67,16 +93,26 @@ export const TransactionTable = ({ transactions, onUpdateCategory }: Transaction
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Date</TableHead>
+              <TableHead 
+                className="cursor-pointer hover:bg-accent/50" 
+                onClick={() => toggleSort('date')}
+              >
+                Date {sortField === 'date' && (sortDirection === 'asc' ? '↑' : '↓')}
+              </TableHead>
               <TableHead>Description</TableHead>
-              <TableHead>Amount</TableHead>
+              <TableHead 
+                className="cursor-pointer hover:bg-accent/50"
+                onClick={() => toggleSort('amount')}
+              >
+                Amount {sortField === 'amount' && (sortDirection === 'asc' ? '↑' : '↓')}
+              </TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Category</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredTransactions.length > 0 ? (
-              filteredTransactions.map((transaction) => (
+            {sortedTransactions.length > 0 ? (
+              sortedTransactions.map((transaction) => (
                 <TableRow key={transaction.id}>
                   <TableCell>{transaction.date}</TableCell>
                   <TableCell>{transaction.description}</TableCell>

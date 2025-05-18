@@ -20,6 +20,7 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [status, setStatus] = useState<string>('');
   const [processingResult, setProcessingResult] = useState<string | null>(null);
+  const [processingError, setProcessingError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -82,7 +83,52 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
     }
   };
   
+  const validateCSVFormat = async (file: File): Promise<boolean> => {
+    try {
+      const text = await file.text();
+      const lines = text.split('\n').filter(line => line.trim());
+      
+      if (lines.length < 2) {
+        toast({
+          title: "Invalid CSV format",
+          description: "File contains insufficient data. Please check your CSV file.",
+          variant: "destructive",
+        });
+        return false;
+      }
+      
+      // Check if the file contains essential data columns
+      const firstLine = lines[0].toLowerCase();
+      const hasHeader = firstLine.includes('date') || firstLine.includes('desc') || firstLine.includes('amount');
+      
+      // If no header, ensure we have at least 3 fields in the first line
+      if (!hasHeader) {
+        const fields = lines[0].split(/[,\t]/).filter(f => f.trim());
+        if (fields.length < 3) {
+          toast({
+            title: "Invalid CSV format", 
+            description: "File does not contain enough columns. Expected at least date, description, and amount.",
+            variant: "destructive",
+          });
+          return false;
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Error validating CSV:", error);
+      toast({
+        title: "Error validating file",
+        description: "Could not read the file content. Please try another file.",
+        variant: "destructive",
+      });
+      return false;
+    }
+  }
+  
   const handleUpload = async () => {
+    setProcessingError(null);
+    
     if (!user) {
       toast({
         title: "Authentication required",
@@ -110,8 +156,20 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
       let totalTransactionsImported = 0;
       
       for (let i = 0; i < uploadedFiles.length; i++) {
-        setStatus(`Uploading file ${i+1} of ${uploadedFiles.length}`);
+        setStatus(`Validating file ${i+1} of ${uploadedFiles.length}`);
         const file = uploadedFiles[i];
+        
+        // Validate CSV files before uploading
+        if (file.name.toLowerCase().endsWith('.csv')) {
+          const isValid = await validateCSVFormat(file);
+          if (!isValid) {
+            setProcessingError(`File ${file.name} has invalid format. Upload canceled.`);
+            setIsUploading(false);
+            return;
+          }
+        }
+        
+        setStatus(`Uploading file ${i+1} of ${uploadedFiles.length}`);
         const fileExt = file.name.split('.').pop();
         const fileName = `${uuidv4()}.${fileExt}`;
         const filePath = `${user.id}/${fileName}`;
@@ -202,7 +260,8 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
         variant: "destructive",
       });
       setIsUploading(false);
-      setProcessingResult(`Error: ${error.message}`);
+      setProcessingResult(null);
+      setProcessingError(`Error: ${error.message}`);
     }
   };
   
@@ -272,6 +331,9 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
                   <p className="mt-2 text-xs text-gray-500">
                     Supported formats: PDF, CSV, TSV, TXT
                   </p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    CSV format should have date, description, and amount columns
+                  </p>
                 </div>
               </div>
             </div>
@@ -282,6 +344,8 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
               
               {processingResult ? (
                 <p className="text-center text-sm font-medium text-green-600">{processingResult}</p>
+              ) : processingError ? (
+                <p className="text-center text-sm font-medium text-red-600">{processingError}</p>
               ) : (
                 <p className="text-center text-sm text-gray-500">
                   {uploadProgress < 100 

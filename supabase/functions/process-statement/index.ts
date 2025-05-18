@@ -1,9 +1,10 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Define common expense categories for classification
 const categories = {
-  housing: ["rent", "mortgage", "property", "home", "hoa", "apartment"],
+  housing: ["rent", "mortgage", "property", "home", "hoa", "apartment", "childcare"],
   utilities: ["electric", "water", "gas", "internet", "wifi", "phone", "utility", "utilities"],
   groceries: ["grocery", "supermarket", "food", "market", "safeway", "kroger", "trader", "whole foods", "aldi", "walmart"],
   diningOut: ["restaurant", "cafe", "coffee", "starbucks", "mcdonalds", "dining", "pizza", "burger", "takeout", "ubereats", "doordash", "grubhub"],
@@ -11,11 +12,12 @@ const categories = {
   healthcare: ["doctor", "hospital", "medical", "dental", "pharmacy", "health", "insurance"],
   entertainment: ["movie", "netflix", "spotify", "hbo", "amazon prime", "disney", "hulu", "theater", "concert"],
   shopping: ["amazon", "target", "clothing", "department", "store", "retail", "online"],
-  subscriptions: ["subscription", "membership", "monthly"],
+  subscriptions: ["subscription", "membership", "monthly", "gym"],
   personal: ["haircut", "salon", "spa", "gym", "fitness"],
   education: ["tuition", "school", "course", "book", "university", "college"],
-  travel: ["hotel", "flight", "airline", "airbnb", "vacation"],
-  income: ["payroll", "deposit", "salary", "income", "payment received", "venmo received", "zelle received", "transfer received"]
+  travel: ["hotel", "flight", "airline", "airbnb", "vacation", "travel"],
+  income: ["paycheck", "deposit", "salary", "income", "payment received", "venmo received", "zelle received", "transfer received", "freelance", "interest"],
+  savings: ["savings", "investment", "transfer"]
 };
 
 // Function to categorize a transaction based on its description
@@ -51,8 +53,8 @@ function parseCSVLine(line: string): string[] {
       
       if (char === '"') {
         inQuotes = !inQuotes;
-      } else if (char === ',' && !inQuotes) {
-        result.push(currentValue);
+      } else if ((char === ',' || char === '\t') && !inQuotes) {
+        result.push(currentValue.trim());
         currentValue = '';
       } else {
         currentValue += char;
@@ -60,12 +62,34 @@ function parseCSVLine(line: string): string[] {
     }
     
     // Push the last value
-    result.push(currentValue);
+    result.push(currentValue.trim());
     return result;
   } catch (error) {
     console.error("Error parsing CSV line:", error, "Line:", line);
     return [];
   }
+}
+
+// Function to detect header columns in the first line
+function detectHeaderColumns(headerLine: string): {dateIndex: number, descriptionIndex: number, amountIndex: number} {
+  const headers = parseCSVLine(headerLine.toLowerCase());
+  console.log("Detected headers:", headers);
+  
+  const dateIndex = headers.findIndex(h => h.includes('date'));
+  const descriptionIndex = headers.findIndex(h => 
+    h.includes('description') || h.includes('desc') || h.includes('name') || h.includes('transaction')
+  );
+  const amountIndex = headers.findIndex(h => 
+    h.includes('amount') || h.includes('sum') || h.includes('price') || h.includes('value')
+  );
+  
+  console.log("Column indices - date:", dateIndex, "description:", descriptionIndex, "amount:", amountIndex);
+  
+  return {
+    dateIndex: dateIndex >= 0 ? dateIndex : 0,
+    descriptionIndex: descriptionIndex >= 0 ? descriptionIndex : 1,
+    amountIndex: amountIndex >= 0 ? amountIndex : 2
+  };
 }
 
 // Improved function to parse dates from various formats
@@ -94,6 +118,11 @@ function parseDate(dateStr: string): string {
       return `${year}-${month}-${day}`;
     }
     
+    // If string already looks like YYYY-MM-DD, return as is
+    if ((match = cleanedDate.match(/^(\d{4})-(\d{2})-(\d{2})$/))) {
+      return cleanedDate;
+    }
+    
     // If no format is recognized, default to current date
     const now = new Date();
     year = now.getFullYear().toString();
@@ -113,7 +142,7 @@ function parseDate(dateStr: string): string {
 function parseAmount(amountStr: string): number | null {
   try {
     // Remove currency symbols, commas, parentheses (for negative numbers), and leading/trailing whitespace
-    let cleaned = amountStr.replace(/[$,\s]/g, '');
+    let cleaned = amountStr.toString().replace(/[$,\s]/g, '');
     
     // Check for parentheses (indicating negative number in accounting)
     let multiplier = 1;
@@ -146,7 +175,11 @@ function looksLikeTransactionLine(line: string): boolean {
   // Check if the line has at least two commas or tabs (meaning at least 3 fields)
   if ((line.match(/,/g) || []).length >= 2 || (line.match(/\t/g) || []).length >= 2) {
     // And contains either a date-like pattern or a currency-like pattern
-    return /\d{1,4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,4}/.test(line) || /\$?\d+\.\d{2}/.test(line);
+    return /\d{1,4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,4}/.test(line) || /\$?\d+\.?\d{0,2}/.test(line);
+  }
+  // For simple TSV-like format with just spaces or tabs
+  if (line.split(/\s+/).length >= 3) {
+    return /\d{4}-\d{2}-\d{2}/.test(line) || /\$?\d+\.?\d{0,2}/.test(line);
   }
   return false;
 }
@@ -220,6 +253,7 @@ serve(async (req) => {
     const isCSV = fileExt === 'csv';
     const isTSV = fileExt === 'tsv';
     const isPDF = fileExt === 'pdf';
+    const isTXT = fileExt === 'txt';
     
     // Get file content as text
     let text;
@@ -234,139 +268,113 @@ serve(async (req) => {
       );
     }
     
-    // Simple detection of delimiter
-    const delimiter = isTSV ? '\t' : ',';
+    // Detect delimiter (comma, tab, or space)
+    let delimiter = ',';
+    if (isTSV) {
+      delimiter = '\t';
+    } else if (text.includes('\t')) {
+      delimiter = '\t';
+    } else if (!text.includes(',') && text.trim().split('\n')[0].includes(' ')) {
+      // If no commas but has spaces, might be space-delimited
+      delimiter = ' ';
+    }
     
     // Sample data for manual review in logs
     const sampleLines = text.split('\n').slice(0, 10).join('\n');
     console.log(`Sample data (first 10 lines):\n${sampleLines}`);
     
     // Split the file into lines
-    const lines = text.split('\n');
+    const lines = text.split('\n').map(line => line.trim()).filter(line => line);
     console.log(`Processing ${lines.length} lines from ${isCSV ? "CSV" : isPDF ? "PDF" : "text"} file`);
+    
+    if (lines.length === 0) {
+      console.error("No data found in file");
+      return new Response(
+        JSON.stringify({ error: "No data found in file" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     
     let validTransactionsCount = 0;
     let skippedLinesCount = 0;
     
-    // We'll use a more flexible approach - try to detect transaction data in each line
-    for (let i = 0; i < lines.length; i++) {
+    // Check if first line looks like a header and detect column indices
+    let headerLine = lines[0];
+    let startIndex = 0;
+    let columnIndices = { dateIndex: 0, descriptionIndex: 1, amountIndex: 2 }; // Default
+    
+    // Detect if first line is a header
+    if (headerLine.toLowerCase().includes('date') || 
+        headerLine.toLowerCase().includes('description') || 
+        headerLine.toLowerCase().includes('amount')) {
+      columnIndices = detectHeaderColumns(headerLine);
+      startIndex = 1; // Skip header row when processing
+      console.log("Using header line to determine columns:", headerLine);
+    } else {
+      console.log("No header detected, using default column order");
+    }
+    
+    // Process each line
+    for (let i = startIndex; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
       
-      // Skip lines that don't look like they might contain transaction data
-      if (!looksLikeTransactionLine(line)) {
-        skippedLinesCount++;
-        continue;
-      }
+      let fields;
       
-      let date, description, amountStr;
-      let fields = [];
-      
-      if (isCSV || isTSV) {
-        // Handle delimiter-separated values
+      // Handle different delimiters
+      if (delimiter === ',') {
         if (line.includes('"')) {
-          // Use special parsing for lines with quoted fields
           fields = parseCSVLine(line);
         } else {
-          // Simple split for unquoted fields
-          fields = line.split(delimiter);
+          fields = line.split(',').map(field => field.trim());
         }
-      } else {
-        // For PDFs and other formats, try common patterns
-        // First check if there are comma or tab separated values
-        if (line.includes(',')) {
-          fields = line.split(',');
-        } else if (line.includes('\t')) {
-          fields = line.split('\t');
-        } else {
-          // Otherwise try to extract values using regex patterns
-          // This is a simplified approach - real implementation would need more patterns
-          const datePattern = /\d{1,4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,4}/;
-          const amountPattern = /[-+]?\$?\s*\d+(?:[,\.]\d+)?(?:\.\d+)?/;
-          
-          const dateMatch = line.match(datePattern);
-          date = dateMatch ? dateMatch[0] : null;
-          
-          const amountMatch = line.match(amountPattern);
-          amountStr = amountMatch ? amountMatch[0] : null;
-          
-          // Description is everything that's not date or amount
-          if (date && amountStr) {
-            description = line
-              .replace(datePattern, '')
-              .replace(amountPattern, '')
-              .trim();
-          }
-        }
+      } else if (delimiter === '\t') {
+        fields = line.split('\t').map(field => field.trim());
+      } else { // Space delimiter
+        // Split by multiple spaces to handle variable spacing
+        fields = line.split(/\s+/).filter(field => field.trim());
       }
       
-      // Try to extract data from fields if available
-      if (fields.length >= 3) {
-        // Attempt to identify which fields are date, description, and amount
-        // This is a simplified approach - would need more sophisticated logic for real app
-        
-        // Look for date-like pattern in fields
-        for (let j = 0; j < Math.min(fields.length, 3); j++) {
-          if (/\d{1,4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,4}/.test(fields[j])) {
-            date = fields[j].trim();
-            // Assume next field is description
-            description = fields[j + 1]?.trim() || '';
-            // Assume amount is one of the next fields
-            for (let k = j + 1; k < fields.length; k++) {
-              const potentialAmount = parseAmount(fields[k]);
-              if (potentialAmount !== null) {
-                amountStr = fields[k].trim();
-                // If description wasn't set yet, use everything between date and amount
-                if (!description && k > j + 1) {
-                  description = fields.slice(j + 1, k).join(' ').trim();
-                }
-                break;
-              }
-            }
-            break;
-          }
-        }
-        
-        // If date not found yet, check if first field might be date
-        if (!date && fields.length > 0) {
-          const firstField = fields[0].trim();
-          if (/\d/.test(firstField)) {  // Contains at least some digits
-            date = firstField;
-            description = fields[1]?.trim() || '';
-            amountStr = fields[2]?.trim() || '';
-          }
-        }
-      }
+      console.log(`Line ${i+1}: Fields detected:`, fields);
       
-      // Skip if we couldn't extract the essential fields
-      if (!date || !description || !amountStr) {
-        console.log(`Skipping line ${i}: Missing essential fields. Found: date=${date}, desc=${description}, amount=${amountStr}`);
+      // Skip if we don't have enough fields
+      if (!fields || fields.length < 3) {
+        console.log(`Skipping line ${i+1}: Not enough fields. Found: ${fields?.length || 0} fields`);
         skippedLinesCount++;
         continue;
       }
       
-      // Parse amount safely
-      const amount = parseAmount(amountStr);
+      const dateField = fields[columnIndices.dateIndex];
+      const descriptionField = fields[columnIndices.descriptionIndex];
+      const amountField = fields[columnIndices.amountIndex];
+      
+      // Skip if any essential field is missing
+      if (!dateField || !descriptionField || !amountField) {
+        console.log(`Skipping line ${i+1}: Missing essential fields. Found: date=${dateField}, desc=${descriptionField}, amount=${amountField}`);
+        skippedLinesCount++;
+        continue;
+      }
+      
+      const date = parseDate(dateField);
+      const description = descriptionField.trim();
+      const amount = parseAmount(amountField);
       
       if (amount === null) {
-        console.log(`Skipping line ${i} due to invalid amount: ${amountStr}`);
+        console.log(`Skipping line ${i+1} due to invalid amount: ${amountField}`);
         skippedLinesCount++;
         continue;
       }
-      
-      // Format and validate date
-      const formattedDate = parseDate(date);
       
       // Determine if income or expense
       const type = amount >= 0 ? 'income' : 'expense';
       const category = categorizeTransaction(description, amount);
       
       // Extract YYYY-MM for month_key
-      const monthKey = formattedDate.substring(0, 7); // Format: YYYY-MM
+      const monthKey = date.substring(0, 7); // Format: YYYY-MM
       
       transactions.push({
         user_id: userId,
-        date: formattedDate,
+        date,
         description,
         amount,
         type,
@@ -376,6 +384,7 @@ serve(async (req) => {
       });
       
       validTransactionsCount++;
+      console.log(`Added transaction: ${date} | ${description} | ${amount} | ${type} | ${category}`);
     }
     
     console.log(`Parsed ${transactions.length} transactions (valid: ${validTransactionsCount}, skipped: ${skippedLinesCount})`);
