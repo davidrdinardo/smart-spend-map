@@ -9,7 +9,7 @@ import { TransactionTable } from '@/components/TransactionTable';
 import { PieChartDisplay } from '@/components/PieChartDisplay';
 import { BarChartDisplay } from '@/components/BarChartDisplay';
 import { UploadWidget } from '@/components/UploadWidget';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { Transaction, MonthSummary, CategorySummary, MonthData } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/providers/AuthProvider';
@@ -129,16 +129,16 @@ const Dashboard = () => {
       const categoryAmounts: Record<string, number> = {};
       
       transactionData?.forEach(tx => {
-        if (tx.amount >= 0) {
+        if (tx.type === 'income') {
           totalIncome += Number(tx.amount);
         } else {
-          totalExpenses += Math.abs(Number(tx.amount));
+          totalExpenses += Number(tx.amount);
           
           // Aggregate expenses by category
           if (!categoryAmounts[tx.category]) {
             categoryAmounts[tx.category] = 0;
           }
-          categoryAmounts[tx.category] += Math.abs(Number(tx.amount));
+          categoryAmounts[tx.category] += Number(tx.amount);
         }
       });
       
@@ -180,10 +180,10 @@ const Dashboard = () => {
           monthlyAgg[item.month_key] = { income: 0, expenses: 0 };
         }
         
-        if (Number(item.amount) >= 0) {
+        if (item.type === 'income') {
           monthlyAgg[item.month_key].income += Number(item.amount);
         } else {
-          monthlyAgg[item.month_key].expenses += Math.abs(Number(item.amount));
+          monthlyAgg[item.month_key].expenses += Number(item.amount);
         }
       });
       
