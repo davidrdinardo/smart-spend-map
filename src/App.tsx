@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/providers/AuthProvider";
 import { useAuth } from "@/providers/AuthProvider";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -17,7 +17,14 @@ const queryClient = new QueryClient();
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
-  const [checkedAuth, setCheckedAuth] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  
+  // Use effect to track when auth check is complete
+  useEffect(() => {
+    if (!loading) {
+      setAuthChecked(true);
+    }
+  }, [loading]);
   
   // Only proceed once we've done the initial auth check
   if (loading) {
@@ -25,7 +32,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   }
   
   // If auth check is done and no user, redirect
-  if (!user) {
+  if (authChecked && !user) {
     console.log("No user found, redirecting to auth page");
     return <Navigate to="/auth" replace />;
   }
@@ -37,6 +44,14 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 // Public route - redirects to dashboard if already logged in
 const PublicRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
+  const [authChecked, setAuthChecked] = useState(false);
+  
+  // Use effect to track when auth check is complete
+  useEffect(() => {
+    if (!loading) {
+      setAuthChecked(true);
+    }
+  }, [loading]);
   
   // Show loading indicator during initial load
   if (loading) {
@@ -44,7 +59,7 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
   }
   
   // Redirect to dashboard if already logged in
-  if (user) {
+  if (authChecked && user) {
     console.log("User found, redirecting to dashboard");
     return <Navigate to="/dashboard" replace />;
   }

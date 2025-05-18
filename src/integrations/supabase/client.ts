@@ -62,3 +62,27 @@ export const debugSupabaseSession = () => {
     currentTimestamp: new Date().toISOString()
   };
 };
+
+// Helper function to fix potential auth loop issues
+export const refreshSessionIfNeeded = async () => {
+  const { data, error } = await supabase.auth.getSession();
+  
+  if (data.session) {
+    // We have a session, check if it's expired or about to expire
+    const now = Math.floor(Date.now() / 1000);
+    const expiresAt = data.session.expires_at;
+    const timeToExpire = expiresAt - now;
+    
+    console.log(`Session expires in ${timeToExpire} seconds`);
+    
+    // If session expires in less than 5 minutes, refresh it
+    if (timeToExpire < 300) {
+      console.log("Session expiring soon, refreshing...");
+      return await supabase.auth.refreshSession();
+    }
+    
+    return { data, error: null };
+  }
+  
+  return { data, error };
+};

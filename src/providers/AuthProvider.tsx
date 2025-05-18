@@ -1,7 +1,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase, checkAuthState } from '@/integrations/supabase/client';
+import { supabase, checkAuthState, refreshSessionIfNeeded } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
 
 type AuthContextType = {
@@ -19,10 +19,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
   
   useEffect(() => {
     console.log("AuthProvider: Setting up auth state listener");
     let isMounted = true;
+    
+    // Function to handle session update
+    const handleSessionUpdate = (newSession: Session | null) => {
+      if (!isMounted) return;
+      setSession(newSession);
+      setUser(newSession?.user ?? null);
+      setLoading(false);
+    };
     
     // Set up auth state listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -32,24 +41,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!isMounted) return;
         
         if (event === 'SIGNED_IN') {
+          handleSessionUpdate(newSession);
           toast({
             title: "Signed in successfully",
             description: `Welcome ${newSession?.user?.email}`,
           });
         } else if (event === 'SIGNED_OUT') {
+          handleSessionUpdate(null);
           toast({
             title: "Signed out",
             description: "You have been signed out",
           });
         } else if (event === 'TOKEN_REFRESHED') {
           console.log("Token refreshed successfully");
+          handleSessionUpdate(newSession);
         } else if (event === 'USER_UPDATED') {
           console.log("User data updated");
+          handleSessionUpdate(newSession);
         }
-        
-        setSession(newSession);
-        setUser(newSession?.user ?? null);
-        setLoading(false);
       }
     );
     
@@ -58,28 +67,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         if (!isMounted) return;
         
-        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
-        console.log("Initial session check:", currentSession?.user?.id);
+        // Check for session and refresh if needed
+        const { data, error } = await refreshSessionIfNeeded();
         
         if (error) {
-          console.error("Error getting session:", error);
+          console.error("Error getting/refreshing session:", error);
         }
         
+        console.log("Initial session check:", data.session?.user?.id);
+        
         if (isMounted) {
-          setSession(currentSession);
-          setUser(currentSession?.user ?? null);
+          setSession(data.session);
+          setUser(data.session?.user ?? null);
           setLoading(false);
+          setInitialized(true);
         }
       } catch (error) {
         console.error("Exception during initial session check:", error);
         if (isMounted) {
           setLoading(false);
+          setInitialized(true);
         }
-      }
-      
-      // Run a diagnostic check
-      if (isMounted) {
-        checkAuthState();
       }
     };
     
@@ -103,6 +111,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           description: error.message,
           variant: "destructive",
         });
+      } else {
+        // Explicitly clear state on successful signout
+        setSession(null);
+        setUser(null);
       }
     } catch (error: any) {
       console.error("Exception during sign out:", error);
@@ -157,6 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       userId: user?.id,
       userEmail: user?.email,
       loading,
+      initialized
     };
   };
   
@@ -166,9 +179,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user: user?.id, 
       email: user?.email,
       session: !!session, 
-      loading 
+      loading,
+      initialized
     });
-  }, [user, session, loading]);
+  }, [user, session, loading, initialized]);
   
   return (
     <AuthContext.Provider value={{ 

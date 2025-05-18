@@ -27,18 +27,26 @@ const Auth = () => {
   const [showDebugDialog, setShowDebugDialog] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>({});
   const [authError, setAuthError] = useState<string | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   
   // Check if user is already logged in
   useEffect(() => {
     const checkUser = async () => {
       try {
+        setCheckingAuth(true);
         const { data } = await supabase.auth.getSession();
+        
         if (data.session?.user) {
-          console.log("User found, navigating to dashboard");
-          navigate('/dashboard');
+          console.log("User found in Auth.tsx, navigating to dashboard");
+          // Add a delay to prevent potential race conditions with auth state changes
+          setTimeout(() => {
+            navigate('/dashboard', { replace: true });
+          }, 100);
         }
       } catch (error) {
         console.error("Error checking user session:", error);
+      } finally {
+        setCheckingAuth(false);
       }
     };
     
@@ -76,6 +84,8 @@ const Auth = () => {
   });
 
   const handleAuth = async (data: z.infer<typeof formSchema>) => {
+    if (loading) return; // Prevent multiple submissions
+    
     setLoading(true);
     setAuthError(null);
     const { email, password } = data;
@@ -123,16 +133,18 @@ const Auth = () => {
             }
           }));
           
-          // Add a small delay to let supabase finish processing
-          setTimeout(() => {
-            toast({
-              title: "Sign up successful!",
-              description: "Please check your email for the confirmation link.",
-            });
-            if (signupData.session) {
-              navigate('/dashboard');
-            }
-          }, 500);
+          toast({
+            title: "Sign up successful!",
+            description: "Please check your email for the confirmation link.",
+          });
+          
+          // Only navigate if session exists (user is auto-confirmed)
+          if (signupData.session) {
+            // Add a small delay to ensure auth state is updated
+            setTimeout(() => {
+              navigate('/dashboard', { replace: true });
+            }, 500);
+          }
         }
       } else {
         // Sign in logic
@@ -168,9 +180,14 @@ const Auth = () => {
             }
           }));
           
-          // Add a small delay to ensure session is fully processed
+          toast({
+            title: "Sign in successful",
+            description: "Welcome back!",
+          });
+          
+          // Add a small delay to ensure auth state is fully processed
           setTimeout(() => {
-            navigate('/dashboard');
+            navigate('/dashboard', { replace: true });
           }, 500);
         }
       }
@@ -233,6 +250,17 @@ const Auth = () => {
       setAuthError(error?.message || "An unexpected error occurred");
     }
   };
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <h2 className="text-xl font-medium mb-2">Checking authentication...</h2>
+          <p className="text-gray-600">Please wait a moment...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
