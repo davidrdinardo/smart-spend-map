@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase, checkAuthState, debugSupabaseSession } from '@/integrations/supabase/client';
-import { useAuth } from '@/providers/AuthProvider';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -28,14 +27,20 @@ const Auth = () => {
   const [showDebugDialog, setShowDebugDialog] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>({});
   const [authError, setAuthError] = useState<string | null>(null);
-  const { user, refreshSession, authDebugInfo } = useAuth();
+  const [user, setUser] = useState(null);
   
-  // Redirect if already logged in
+  // Check if user is already logged in
   useEffect(() => {
-    if (user) {
-      navigate('/dashboard');
-    }
-  }, [user, navigate]);
+    const checkUser = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user) {
+        setUser(data.session.user);
+        navigate('/dashboard');
+      }
+    };
+    
+    checkUser();
+  }, [navigate]);
 
   // Check auth state when component mounts
   useEffect(() => {
@@ -117,6 +122,9 @@ const Auth = () => {
               title: "Sign up successful!",
               description: "Please check your email for the confirmation link.",
             });
+            if (signupData.session) {
+              navigate('/dashboard');
+            }
           }, 500);
         }
       } else {
@@ -169,30 +177,49 @@ const Auth = () => {
 
   const handleDebugClick = () => {
     // Update debug info with current state
-    setDebugInfo(prev => ({
-      ...prev,
-      currentState: {
-        timestamp: new Date().toISOString(),
-        localStorage: debugSupabaseSession(),
-        authContext: authDebugInfo()
-      }
-    }));
-    setShowDebugDialog(true);
+    const getDebugInfo = async () => {
+      const authState = await checkAuthState();
+      setDebugInfo(prev => ({
+        ...prev,
+        currentState: {
+          timestamp: new Date().toISOString(),
+          localStorage: debugSupabaseSession(),
+          authState
+        }
+      }));
+      setShowDebugDialog(true);
+    };
+    
+    getDebugInfo();
   };
 
   const handleTestRefresh = async () => {
     try {
-      await refreshSession();
-      // Update debug info after refresh
-      setDebugInfo(prev => ({
-        ...prev,
-        refreshAttempt: {
-          timestamp: new Date().toISOString(),
-          authContext: authDebugInfo()
-        }
-      }));
-    } catch (error) {
+      const { data, error } = await supabase.auth.refreshSession();
+      
+      if (error) {
+        console.error("Session refresh error:", error);
+        setAuthError(error.message);
+      } else {
+        console.log("Session refreshed:", data.session?.user?.id);
+        
+        setDebugInfo(prev => ({
+          ...prev,
+          refreshAttempt: {
+            timestamp: new Date().toISOString(),
+            success: !!data.session,
+            userId: data.session?.user?.id
+          }
+        }));
+        
+        toast({
+          title: "Session refresh attempt",
+          description: data.session ? "Session refreshed successfully" : "No active session to refresh",
+        });
+      }
+    } catch (error: any) {
       console.error("Test refresh failed:", error);
+      setAuthError(error?.message || "An unexpected error occurred");
     }
   };
 
