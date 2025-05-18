@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/providers/AuthProvider";
 import { useAuth } from "@/providers/AuthProvider";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -17,14 +17,16 @@ const queryClient = new QueryClient();
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
+  const [checkedAuth, setCheckedAuth] = useState(false);
   
-  // Show nothing during initial load to prevent flash
+  // Only proceed once we've done the initial auth check
   if (loading) {
-    return null;
+    return <div className="flex justify-center items-center h-screen">Loading...</div>;
   }
   
-  // Redirect to auth if no user
+  // If auth check is done and no user, redirect
   if (!user) {
+    console.log("No user found, redirecting to auth page");
     return <Navigate to="/auth" replace />;
   }
   
@@ -36,13 +38,14 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 const PublicRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   
-  // Show nothing during initial load
+  // Show loading indicator during initial load
   if (loading) {
-    return null;
+    return <div className="flex justify-center items-center h-screen">Loading...</div>;
   }
   
   // Redirect to dashboard if already logged in
   if (user) {
+    console.log("User found, redirecting to dashboard");
     return <Navigate to="/dashboard" replace />;
   }
   

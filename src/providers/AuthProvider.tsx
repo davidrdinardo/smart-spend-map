@@ -22,11 +22,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   
   useEffect(() => {
     console.log("AuthProvider: Setting up auth state listener");
+    let isMounted = true;
     
     // Set up auth state listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, newSession) => {
         console.log("Auth state changed:", event, newSession?.user?.id);
+        
+        if (!isMounted) return;
         
         if (event === 'SIGNED_IN') {
           toast({
@@ -53,31 +56,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Then check for existing session
     const getInitialSession = async () => {
       try {
+        if (!isMounted) return;
+        
         const { data: { session: currentSession }, error } = await supabase.auth.getSession();
         console.log("Initial session check:", currentSession?.user?.id);
+        
         if (error) {
           console.error("Error getting session:", error);
         }
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-        setLoading(false);
+        
+        if (isMounted) {
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
+          setLoading(false);
+        }
       } catch (error) {
         console.error("Exception during initial session check:", error);
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
       
       // Run a diagnostic check
-      checkAuthState();
+      if (isMounted) {
+        checkAuthState();
+      }
     };
     
     getInitialSession();
     
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
   
   const signOut = async () => {
     try {
       console.log("Signing out...");
+      setLoading(true);
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error("Error signing out:", error);
@@ -94,6 +111,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: error?.message || "An unexpected error occurred",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
