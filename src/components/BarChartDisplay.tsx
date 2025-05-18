@@ -1,5 +1,5 @@
 
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Cell } from 'recharts';
 import { MonthData } from '@/types';
 
 interface BarChartDisplayProps {
@@ -52,9 +52,15 @@ export const BarChartDisplay = ({ data }: BarChartDisplayProps) => {
             <Bar 
               dataKey="net" 
               name="Net Amount"
-              fill={(data) => data.net >= 0 ? '#22c55e' : '#ef4444'} 
               radius={[4, 4, 0, 0]}
-            />
+            >
+              {formattedData.map((entry, index) => (
+                <Cell 
+                  key={`cell-${index}`} 
+                  fill={entry.net >= 0 ? '#22c55e' : '#ef4444'} 
+                />
+              ))}
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       ) : (
