@@ -64,6 +64,9 @@ export const TransactionTable = ({ transactions, onUpdateCategory }: Transaction
     }
   };
   
+  // Debug transactions
+  console.log('Transactions received:', transactions);
+  
   return (
     <div>
       <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -78,7 +81,7 @@ export const TransactionTable = ({ transactions, onUpdateCategory }: Transaction
         </div>
       </div>
       
-      {transactions.length === 0 && (
+      {transactions.length === 0 ? (
         <Alert className="mb-4">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>No transactions found</AlertTitle>
@@ -87,84 +90,84 @@ export const TransactionTable = ({ transactions, onUpdateCategory }: Transaction
             Make sure your file contains transaction data in a structured format.
           </AlertDescription>
         </Alert>
-      )}
-      
-      <div className="rounded-md border overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead 
-                className="cursor-pointer hover:bg-accent/50" 
-                onClick={() => toggleSort('date')}
-              >
-                Date {sortField === 'date' && (sortDirection === 'asc' ? '↑' : '↓')}
-              </TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead 
-                className="cursor-pointer hover:bg-accent/50"
-                onClick={() => toggleSort('amount')}
-              >
-                Amount {sortField === 'amount' && (sortDirection === 'asc' ? '↑' : '↓')}
-              </TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Category</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sortedTransactions.length > 0 ? (
-              sortedTransactions.map((transaction) => (
-                <TableRow key={transaction.id}>
-                  <TableCell>{transaction.date}</TableCell>
-                  <TableCell>{transaction.description}</TableCell>
-                  <TableCell 
-                    className={`font-medium ${transaction.amount >= 0 ? 'text-income-dark' : 'text-expense-dark'}`}
-                  >
-                    ${Math.abs(transaction.amount).toFixed(2)}
-                  </TableCell>
-                  <TableCell>
-                    <span 
-                      className={`inline-block px-2 py-1 rounded-full text-xs ${
-                        transaction.type === 'income' 
-                          ? 'bg-income-light/20 text-income-dark' 
-                          : 'bg-expense-light/20 text-expense-dark'
-                      }`}
+      ) : (
+        <div className="rounded-md border overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead 
+                  className="cursor-pointer hover:bg-accent/50" 
+                  onClick={() => toggleSort('date')}
+                >
+                  Date {sortField === 'date' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead 
+                  className="cursor-pointer hover:bg-accent/50"
+                  onClick={() => toggleSort('amount')}
+                >
+                  Amount {sortField === 'amount' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Category</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sortedTransactions.length > 0 ? (
+                sortedTransactions.map((transaction) => (
+                  <TableRow key={transaction.id}>
+                    <TableCell>{transaction.date}</TableCell>
+                    <TableCell>{transaction.description}</TableCell>
+                    <TableCell 
+                      className={`font-medium ${transaction.amount >= 0 ? 'text-income-dark' : 'text-expense-dark'}`}
                     >
-                      {transaction.type === 'income' ? 'Income' : 'Expense'}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    {transaction.type === 'income' ? (
-                      'Income'
-                    ) : (
-                      <Select 
-                        value={transaction.category} 
-                        onValueChange={(value) => onUpdateCategory(transaction.id, value)}
+                      ${Math.abs(transaction.amount).toFixed(2)}
+                    </TableCell>
+                    <TableCell>
+                      <span 
+                        className={`inline-block px-2 py-1 rounded-full text-xs ${
+                          transaction.amount >= 0 
+                            ? 'bg-income-light/20 text-income-dark' 
+                            : 'bg-expense-light/20 text-expense-dark'
+                        }`}
                       >
-                        <SelectTrigger className="w-[140px]">
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories.map(category => (
-                            <SelectItem key={category} value={category}>
-                              {category}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
+                        {transaction.amount >= 0 ? 'Income' : 'Expense'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {transaction.amount >= 0 ? (
+                        'Income'
+                      ) : (
+                        <Select 
+                          value={transaction.category} 
+                          onValueChange={(value) => onUpdateCategory(transaction.id, value)}
+                        >
+                          <SelectTrigger className="w-[140px]">
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.map(category => (
+                              <SelectItem key={category} value={category}>
+                                {category}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-24 text-center">
+                    No transactions found.
                   </TableCell>
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center">
-                  No transactions found.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -66,6 +67,8 @@ const Dashboard = () => {
       // Get distinct month keys
       const uniqueMonthKeys = Array.from(new Set(data.map(item => item.month_key)));
       
+      console.log("Available month keys:", uniqueMonthKeys);
+      
       if (uniqueMonthKeys.length === 0) {
         // No data yet, just use current month
         setAvailableMonths([{
@@ -88,7 +91,7 @@ const Dashboard = () => {
       setAvailableMonths(months);
       
       // If we have months, select the most recent one
-      if (months.length > 0 && !selectedMonth) {
+      if (months.length > 0) {
         setSelectedMonth(months[0].key);
       }
     } catch (error: any) {
@@ -102,6 +105,7 @@ const Dashboard = () => {
   
   const fetchMonthData = async (monthKey: string) => {
     setIsLoading(true);
+    console.log("Fetching data for month:", monthKey);
     
     try {
       // Fetch transactions for the selected month
@@ -114,6 +118,7 @@ const Dashboard = () => {
         
       if (transactionError) throw transactionError;
       
+      console.log("Fetched transactions:", transactionData?.length || 0, transactionData);
       setTransactions(transactionData || []);
       
       // Calculate summary for the month
@@ -123,18 +128,20 @@ const Dashboard = () => {
       const categoryAmounts: Record<string, number> = {};
       
       transactionData?.forEach(tx => {
-        if (tx.type === 'income') {
-          totalIncome += tx.amount;
+        if (tx.amount >= 0) {
+          totalIncome += Number(tx.amount);
         } else {
-          totalExpenses += Math.abs(tx.amount);
+          totalExpenses += Math.abs(Number(tx.amount));
           
           // Aggregate expenses by category
           if (!categoryAmounts[tx.category]) {
             categoryAmounts[tx.category] = 0;
           }
-          categoryAmounts[tx.category] += Math.abs(tx.amount);
+          categoryAmounts[tx.category] += Math.abs(Number(tx.amount));
         }
       });
+      
+      console.log("Summary calculation:", {totalIncome, totalExpenses});
       
       // Set month summary
       setMonthSummary({
@@ -152,6 +159,7 @@ const Dashboard = () => {
         percentage: totalExpenseAmount > 0 ? (amount / totalExpenseAmount) * 100 : 0
       }));
       
+      console.log("Category data:", categoryItems);
       setCategoryData(categoryItems);
       
       // Fetch monthly aggregated data for the bar chart
@@ -171,10 +179,10 @@ const Dashboard = () => {
           monthlyAgg[item.month_key] = { income: 0, expenses: 0 };
         }
         
-        if (item.type === 'income') {
-          monthlyAgg[item.month_key].income += item.amount;
+        if (Number(item.amount) >= 0) {
+          monthlyAgg[item.month_key].income += Number(item.amount);
         } else {
-          monthlyAgg[item.month_key].expenses += Math.abs(item.amount);
+          monthlyAgg[item.month_key].expenses += Math.abs(Number(item.amount));
         }
       });
       
@@ -184,6 +192,7 @@ const Dashboard = () => {
         net: values.income - values.expenses
       }));
       
+      console.log("Monthly data:", monthlyItems);
       setMonthlyData(monthlyItems);
     } catch (error: any) {
       toast({
