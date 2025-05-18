@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -61,6 +62,17 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				// Money Map custom colors
+				income: {
+					light: '#4ade80',
+					DEFAULT: '#22c55e',
+					dark: '#16a34a'
+				},
+				expense: {
+					light: '#f87171',
+					DEFAULT: '#ef4444',
+					dark: '#dc2626'
 				}
 			},
 			borderRadius: {
