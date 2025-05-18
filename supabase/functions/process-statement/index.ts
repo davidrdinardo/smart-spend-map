@@ -25,7 +25,7 @@ function categorizeTransaction(description: string, amount: number): string {
   description = description.toLowerCase();
   
   // Check for income first (deposits are typically positive amounts)
-  if (amount > 0 || categories.income.some(keyword => description.includes(keyword))) {
+  if (amount > 0) {
     return "Income";
   }
   
@@ -63,6 +63,7 @@ function parseCSVLine(line: string): string[] {
     
     // Push the last value
     result.push(currentValue.trim());
+    console.log("Parsed CSV line:", result);
     return result;
   } catch (error) {
     console.error("Error parsing CSV line:", error, "Line:", line);
@@ -97,6 +98,7 @@ function parseDate(dateStr: string): string {
   try {
     // Clean up the date string - remove any non-alphanumeric characters except /-
     const cleanedDate = dateStr.replace(/[^\w\/-]/g, '').trim();
+    console.log(`Parsing date: "${dateStr}" (cleaned: "${cleanedDate}")`);
     
     // Try to detect different date formats
     let match;
@@ -107,6 +109,7 @@ function parseDate(dateStr: string): string {
       month = match[1].padStart(2, '0');
       day = match[2].padStart(2, '0');
       year = match[3].length === 2 ? `20${match[3]}` : match[3];
+      console.log(`Parsed date as MM/DD/YYYY: ${year}-${month}-${day}`);
       return `${year}-${month}-${day}`;
     }
     
@@ -115,11 +118,13 @@ function parseDate(dateStr: string): string {
       year = match[1];
       month = match[2].padStart(2, '0');
       day = match[3].padStart(2, '0');
+      console.log(`Parsed date as YYYY/MM/DD: ${year}-${month}-${day}`);
       return `${year}-${month}-${day}`;
     }
     
     // If string already looks like YYYY-MM-DD, return as is
     if ((match = cleanedDate.match(/^(\d{4})-(\d{2})-(\d{2})$/))) {
+      console.log(`Date already in YYYY-MM-DD format: ${cleanedDate}`);
       return cleanedDate;
     }
     
@@ -144,15 +149,19 @@ function parseAmount(amountStr: string): number | null {
     // Remove currency symbols, commas, parentheses (for negative numbers), and leading/trailing whitespace
     let cleaned = amountStr.toString().replace(/[$,\s]/g, '');
     
+    console.log(`Parsing amount: "${amountStr}" (cleaned: "${cleaned}")`);
+    
     // Check for parentheses (indicating negative number in accounting)
     let multiplier = 1;
     if (cleaned.match(/^\(.*\)$/)) {
       cleaned = cleaned.replace(/[()]/g, '');
       multiplier = -1;
+      console.log(`Amount in parentheses, applying negative multiplier. Cleaned: "${cleaned}"`);
     }
     
     // Check if string contains any non-allowed characters
     if (!/^-?\d*\.?\d*$/.test(cleaned)) {
+      console.log(`Invalid amount format: "${cleaned}"`);
       return null;
     }
     
@@ -160,9 +169,11 @@ function parseAmount(amountStr: string): number | null {
     const amount = parseFloat(cleaned) * multiplier;
     
     if (isNaN(amount)) {
+      console.log(`Amount is NaN: "${cleaned}"`);
       return null;
     }
     
+    console.log(`Parsed amount: ${amount}`);
     return amount;
   } catch (error) {
     console.error("Error parsing amount:", error, "Amount string:", amountStr);
@@ -175,7 +186,10 @@ function looksLikeTransactionLine(line: string): boolean {
   // Check if the line has at least two commas or tabs (meaning at least 3 fields)
   if ((line.match(/,/g) || []).length >= 2 || (line.match(/\t/g) || []).length >= 2) {
     // And contains either a date-like pattern or a currency-like pattern
-    return /\d{1,4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,4}/.test(line) || /\$?\d+\.?\d{0,2}/.test(line);
+    const hasDatePattern = /\d{1,4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,4}/.test(line);
+    const hasCurrencyPattern = /\$?\d+\.?\d{0,2}/.test(line);
+    console.log(`Line transaction check - Has date: ${hasDatePattern}, Has currency: ${hasCurrencyPattern}`);
+    return hasDatePattern || hasCurrencyPattern;
   }
   // For simple TSV-like format with just spaces or tabs
   if (line.split(/\s+/).length >= 3) {
@@ -269,6 +283,8 @@ async function extractTransactionsFromPDF(buffer: ArrayBuffer): Promise<{ date: 
     // Try to detect what type of bank statement this is based on common formats
     const containsDatePattern = /\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{2}-\d{2}/.test(text);
     const containsAmountPattern = /\$\s*\d+\.\d{2}|-\$\s*\d+\.\d{2}|\(\$\s*\d+\.\d{2}\)|\d+\.\d{2}\s*(DR|CR)/.test(text);
+    
+    console.log(`PDF format detection - Has date patterns: ${containsDatePattern}, Has amount patterns: ${containsAmountPattern}`);
     
     if (!containsDatePattern || !containsAmountPattern) {
       console.log("PDF does not appear to contain standard transaction formats");
@@ -373,6 +389,8 @@ async function extractTransactionsFromPDF(buffer: ArrayBuffer): Promise<{ date: 
       if (dateMatch && description && !isNaN(amountValue)) {
         const formattedDate = parseDate(dateMatch);
         
+        console.log(`Extracted PDF transaction: ${formattedDate} | ${description} | ${amountValue}`);
+        
         transactions.push({
           date: formattedDate,
           description: description || "Unknown transaction",
@@ -460,6 +478,8 @@ serve(async (req) => {
     const isPDF = fileExt === 'pdf';
     const isTXT = fileExt === 'txt';
     
+    console.log(`Processing file with extension: ${fileExt} - CSV:${isCSV}, TSV:${isTSV}, PDF:${isPDF}, TXT:${isTXT}`);
+    
     // Process PDF differently than text-based files
     if (isPDF) {
       try {
@@ -478,8 +498,8 @@ serve(async (req) => {
           // Negative = expense, Positive = income
           const type = amount >= 0 ? 'income' : 'expense';
           
-          // Categorize based on description and type
-          const category = type === 'income' ? 'Income' : categorizeTransaction(description, -1);
+          // Categorize based on description and amount
+          const category = type === 'income' ? 'Income' : categorizeTransaction(description, amount);
           
           // Extract YYYY-MM for month_key
           const monthKey = date.substring(0, 7); // Format: YYYY-MM
@@ -578,11 +598,11 @@ serve(async (req) => {
         
         // Special case for bank statements with 'Withdrawals' and 'Deposits' columns
         const headers = headerLine.toLowerCase().split(delimiter).map(h => h.trim());
-        const withdrawalsIndex = headers.findIndex(h => h.includes('withdraw'));
-        const depositsIndex = headers.findIndex(h => h.includes('deposit'));
+        const withdrawalsIndex = headers.findIndex(h => h.includes('withdraw') || h.includes('debit'));
+        const depositsIndex = headers.findIndex(h => h.includes('deposit') || h.includes('credit'));
         
         if (withdrawalsIndex >= 0 && depositsIndex >= 0) {
-          console.log("Detected withdrawals and deposits columns");
+          console.log("Detected withdrawals and deposits columns:", withdrawalsIndex, depositsIndex);
           columnIndices.amountIndex = -1; // Special marker to handle two amount columns
         }
       } else {
@@ -629,8 +649,8 @@ serve(async (req) => {
         if (columnIndices.amountIndex === -1) {
           // Special case with separate withdrawals and deposits columns
           const headers = headerLine.toLowerCase().split(delimiter).map(h => h.trim());
-          const withdrawalsIndex = headers.findIndex(h => h.includes('withdraw'));
-          const depositsIndex = headers.findIndex(h => h.includes('deposit'));
+          const withdrawalsIndex = headers.findIndex(h => h.includes('withdraw') || h.includes('debit'));
+          const depositsIndex = headers.findIndex(h => h.includes('deposit') || h.includes('credit'));
           
           console.log("Using separate columns:", { withdrawalsIndex, depositsIndex });
           
@@ -728,19 +748,25 @@ serve(async (req) => {
         const batch = transactions.slice(i, i + BATCH_SIZE);
         console.log(`Inserting batch ${Math.floor(i / BATCH_SIZE) + 1} with ${batch.length} transactions`);
         
-        console.log("Sample transaction in batch:", batch[0]);
-        
-        const { data: insertData, error: insertError } = await supabase
-          .from('transactions')
-          .insert(batch)
-          .select();
+        if (batch.length > 0) {
+          console.log("Sample transaction in batch:", batch[0]);
           
-        if (insertError) {
-          console.error(`Error inserting batch ${Math.floor(i / BATCH_SIZE) + 1}:`, insertError);
-          // Continue with other batches even if one fails
-        } else {
-          insertedCount += insertData?.length || 0;
-          console.log(`Successfully inserted ${insertData?.length || 0} transactions`);
+          try {
+            const { data: insertData, error: insertError } = await supabase
+              .from('transactions')
+              .insert(batch)
+              .select();
+              
+            if (insertError) {
+              console.error(`Error inserting batch ${Math.floor(i / BATCH_SIZE) + 1}:`, insertError);
+              // Continue with other batches even if one fails
+            } else {
+              insertedCount += insertData?.length || 0;
+              console.log(`Successfully inserted ${insertData?.length || 0} transactions`);
+            }
+          } catch (batchError) {
+            console.error(`Exception in batch ${Math.floor(i / BATCH_SIZE) + 1}:`, batchError);
+          }
         }
       }
     } else {
@@ -758,7 +784,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Processed and inserted ${insertedCount} transactions out of ${transactions.length} parsed`,
+        message: insertedCount > 0 
+          ? `Processed and inserted ${insertedCount} transactions out of ${transactions.length} parsed` 
+          : "No transactions were found in the uploaded files",
         details: {
           total_transactions: transactions.length,
           inserted_transactions: insertedCount

@@ -3,7 +3,7 @@ import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/providers/AuthProvider';
 import { v4 as uuidv4 } from 'uuid';
@@ -97,6 +97,8 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
         return false;
       }
       
+      console.log("CSV validation - first line:", lines[0]);
+      
       // Check if the file contains essential data columns
       const firstLine = lines[0].toLowerCase();
       const hasHeader = firstLine.includes('date') || firstLine.includes('desc') || firstLine.includes('amount');
@@ -181,6 +183,9 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
         setStatus(`Validating file ${i+1} of ${uploadedFiles.length}`);
         const file = uploadedFiles[i];
         
+        // Log file details for debugging
+        console.log(`Processing file: ${file.name}, type: ${file.type}, size: ${file.size} bytes`);
+        
         // Validate CSV files before uploading
         if (file.name.toLowerCase().endsWith('.csv')) {
           const isValid = await validateCSVFormat(file);
@@ -254,10 +259,18 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
               totalTransactionsImported += data.details.inserted_transactions;
             }
             
-            toast({
-              title: "File processed",
-              description: `${data?.message || "File processed successfully"}`,
-            });
+            if (data?.details?.inserted_transactions === 0) {
+              toast({
+                title: "No transactions found",
+                description: `No transactions were found in ${file.name}. Please check the file format.`,
+                variant: "destructive",
+              });
+            } else {
+              toast({
+                title: "File processed",
+                description: `${data?.message || "File processed successfully"}`,
+              });
+            }
           }
         } catch (funcError: any) {
           console.error(`Error calling function: ${funcError.message}`);
@@ -272,18 +285,29 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
       setUploadProgress(100);
       setStatus(`Processing complete!`);
       
-      const resultMessage = `Successfully imported ${totalTransactionsImported} transactions from ${uploads.length} file${uploads.length !== 1 ? 's' : ''}.`;
+      const resultMessage = totalTransactionsImported > 0 
+        ? `Successfully imported ${totalTransactionsImported} transactions from ${uploads.length} file${uploads.length !== 1 ? 's' : ''}.`
+        : `Processed ${uploads.length} file${uploads.length !== 1 ? 's' : ''}, but no transactions were imported. Please check the file formats.`;
+      
       setProcessingResult(resultMessage);
       
       // Wait a moment to show 100% progress
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      toast({
-        title: "Upload complete",
-        description: resultMessage,
-      });
-      
-      onComplete();
+      if (totalTransactionsImported > 0) {
+        toast({
+          title: "Upload complete",
+          description: resultMessage,
+        });
+        onComplete();
+      } else {
+        setIsUploading(false);
+        toast({
+          title: "No data imported",
+          description: "No transactions were found in the uploaded files. Please check the file formats and try again.",
+          variant: "destructive",
+        });
+      }
     } catch (error: any) {
       toast({
         title: "Upload failed",
@@ -318,29 +342,10 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
                   ? 'border-income-dark bg-income-light/10' 
                   : 'border-gray-300 hover:border-income'
               }`}
-              onDragEnter={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsDragging(true);
-              }}
-              onDragLeave={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsDragging(false);
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsDragging(false);
-                
-                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                  processFiles(e.dataTransfer.files);
-                }
-              }}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
             >
               <div className="flex flex-col items-center justify-center space-y-4">
                 <svg 
@@ -376,11 +381,7 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
                     className="hidden"
                     accept=".pdf,.csv,.tsv,.txt"
                     multiple
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files.length > 0) {
-                        processFiles(e.target.files);
-                      }
-                    }}
+                    onChange={handleFileInputChange}
                   />
                   <p className="mt-2 text-xs text-gray-500">
                     Supported formats: PDF, CSV, TSV, TXT
