@@ -11,11 +11,13 @@ import { BarChartDisplay } from '@/components/BarChartDisplay';
 import { UploadWidget } from '@/components/UploadWidget';
 import { useToast } from '@/components/ui/use-toast';
 import { Transaction, MonthSummary, CategorySummary, MonthData } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/providers/AuthProvider';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { user, loading, signOut } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
   
@@ -29,52 +31,163 @@ const Dashboard = () => {
   const [categoryData, setCategoryData] = useState<CategorySummary[]>([]);
   const [monthlyData, setMonthlyData] = useState<MonthData[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [availableMonths, setAvailableMonths] = useState<{key: string, label: string}[]>([]);
   
-  // Mock months for the selector
-  const availableMonths = [
-    { key: format(new Date(), 'yyyy-MM'), label: format(new Date(), 'MMMM yyyy') }
-  ];
-  
+  // Check for authentication
   useEffect(() => {
-    // This would be replaced with actual Supabase auth check
-    const timeoutId = setTimeout(() => {
-      setIsAuthenticated(true);
-      setIsLoading(false);
-    }, 1000);
-    
-    return () => clearTimeout(timeoutId);
-  }, []);
+    if (!loading && !user) {
+      navigate('/auth');
+    }
+  }, [user, loading, navigate]);
   
+  // Fetch available months
   useEffect(() => {
-    // This would be replaced with real data fetching from Supabase
-    if (selectedMonth) {
+    if (user) {
+      fetchAvailableMonths();
+    }
+  }, [user]);
+  
+  // Fetch data for selected month
+  useEffect(() => {
+    if (selectedMonth && user) {
       fetchMonthData(selectedMonth);
     }
-  }, [selectedMonth]);
+  }, [selectedMonth, user]);
+  
+  const fetchAvailableMonths = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('month_key')
+        .eq('user_id', user!.id)
+        .order('month_key', { ascending: false })
+        .distinct();
+        
+      if (error) throw error;
+      
+      if (data.length === 0) {
+        // No data yet, just use current month
+        setAvailableMonths([{
+          key: format(new Date(), 'yyyy-MM'),
+          label: format(new Date(), 'MMMM yyyy')
+        }]);
+        return;
+      }
+      
+      // Format the month keys for display
+      const months = data.map(item => {
+        const [year, month] = item.month_key.split('-');
+        const date = new Date(parseInt(year), parseInt(month) - 1);
+        return {
+          key: item.month_key,
+          label: format(date, 'MMMM yyyy')
+        };
+      });
+      
+      setAvailableMonths(months);
+      
+      // If we have months, select the most recent one
+      if (months.length > 0 && !selectedMonth) {
+        setSelectedMonth(months[0].key);
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error loading months",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
   
   const fetchMonthData = async (monthKey: string) => {
     setIsLoading(true);
     
     try {
-      // Simulate an API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Fetch transactions for the selected month
+      const { data: transactionData, error: transactionError } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', user!.id)
+        .eq('month_key', monthKey)
+        .order('date', { ascending: false });
+        
+      if (transactionError) throw transactionError;
       
-      // Empty data for blank state
-      setTransactions([]);
+      setTransactions(transactionData || []);
       
-      setMonthSummary({
-        income: 0,
-        expenses: 0,
-        net: 0
+      // Calculate summary for the month
+      let totalIncome = 0;
+      let totalExpenses = 0;
+      
+      const categoryAmounts: Record<string, number> = {};
+      
+      transactionData?.forEach(tx => {
+        if (tx.type === 'income') {
+          totalIncome += tx.amount;
+        } else {
+          totalExpenses += Math.abs(tx.amount);
+          
+          // Aggregate expenses by category
+          if (!categoryAmounts[tx.category]) {
+            categoryAmounts[tx.category] = 0;
+          }
+          categoryAmounts[tx.category] += Math.abs(tx.amount);
+        }
       });
       
-      setCategoryData([]);
-      setMonthlyData([]);
+      // Set month summary
+      setMonthSummary({
+        income: totalIncome,
+        expenses: totalExpenses,
+        net: totalIncome - totalExpenses
+      });
       
-    } catch (error) {
+      // Calculate categories for pie chart
+      const totalExpenseAmount = Object.values(categoryAmounts).reduce((sum, amount) => sum + amount, 0);
+      
+      const categoryItems: CategorySummary[] = Object.entries(categoryAmounts).map(([category, amount]) => ({
+        category,
+        amount,
+        percentage: totalExpenseAmount > 0 ? (amount / totalExpenseAmount) * 100 : 0
+      }));
+      
+      setCategoryData(categoryItems);
+      
+      // Fetch monthly aggregated data for the bar chart
+      const { data: monthlyRaw, error: monthlyError } = await supabase
+        .from('transactions')
+        .select('month_key, amount, type')
+        .eq('user_id', user!.id)
+        .order('month_key', { ascending: true });
+        
+      if (monthlyError) throw monthlyError;
+      
+      // Aggregate monthly data
+      const monthlyAgg: Record<string, { income: number, expenses: number }> = {};
+      
+      monthlyRaw?.forEach(item => {
+        if (!monthlyAgg[item.month_key]) {
+          monthlyAgg[item.month_key] = { income: 0, expenses: 0 };
+        }
+        
+        if (item.type === 'income') {
+          monthlyAgg[item.month_key].income += item.amount;
+        } else {
+          monthlyAgg[item.month_key].expenses += Math.abs(item.amount);
+        }
+      });
+      
+      // Convert to array for the chart
+      const monthlyItems: MonthData[] = Object.entries(monthlyAgg).map(([month, values]) => ({
+        month_key: month,
+        net: values.income - values.expenses
+      }));
+      
+      setMonthlyData(monthlyItems);
+    } catch (error: any) {
       toast({
         title: "Error loading data",
-        description: "There was a problem loading your financial data.",
+        description: error.message,
         variant: "destructive",
       });
     } finally {
@@ -89,27 +202,42 @@ const Dashboard = () => {
       description: "Your files have been processed successfully.",
     });
     // Refresh data
+    fetchAvailableMonths();
     fetchMonthData(selectedMonth);
   };
   
   const handleUpdateCategory = async (transactionId: string, newCategory: string) => {
-    // This would update the category in Supabase
-    toast({
-      title: "Category updated",
-      description: `Transaction category changed to ${newCategory}.`,
-    });
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .update({ category: newCategory })
+        .eq('id', transactionId)
+        .eq('user_id', user!.id);
+        
+      if (error) throw error;
+      
+      toast({
+        title: "Category updated",
+        description: `Transaction category changed to ${newCategory}.`,
+      });
+      
+      // Refresh data
+      fetchMonthData(selectedMonth);
+    } catch (error: any) {
+      toast({
+        title: "Error updating category",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
   
-  const handleSignOut = () => {
-    // This would be replaced with actual Supabase sign out
-    toast({
-      title: "Signed out",
-      description: "You have been successfully signed out.",
-    });
-    navigate('/');
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/auth');
   };
   
-  if (isLoading && !isAuthenticated) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -166,7 +294,7 @@ const Dashboard = () => {
               <CardHeader className="pb-2">
                 <CardDescription>Total Income</CardDescription>
                 <CardTitle className="text-2xl text-income-dark">
-                  $0.00
+                  ${monthSummary.income.toFixed(2)}
                 </CardTitle>
               </CardHeader>
             </Card>
@@ -174,21 +302,25 @@ const Dashboard = () => {
               <CardHeader className="pb-2">
                 <CardDescription>Total Expenses</CardDescription>
                 <CardTitle className="text-2xl text-expense-dark">
-                  $0.00
+                  ${monthSummary.expenses.toFixed(2)}
                 </CardTitle>
               </CardHeader>
             </Card>
             <Card>
               <CardHeader className="pb-2">
                 <CardDescription>Net Balance</CardDescription>
-                <CardTitle className="text-2xl text-income-dark">
-                  $0.00
+                <CardTitle className={`text-2xl ${monthSummary.net >= 0 ? 'text-income-dark' : 'text-expense-dark'}`}>
+                  ${monthSummary.net.toFixed(2)}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-gray-500">
-                  Upload statements to see your financial summary.
-                </p>
+                {isLoading ? (
+                  <p className="text-sm text-gray-500">Loading...</p>
+                ) : transactions.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    Upload statements to see your financial summary.
+                  </p>
+                ) : null}
               </CardContent>
             </Card>
           </div>
@@ -200,7 +332,7 @@ const Dashboard = () => {
                 <CardTitle>Expenses by Category</CardTitle>
               </CardHeader>
               <CardContent className="h-80">
-                <PieChartDisplay data={[]} />
+                <PieChartDisplay data={categoryData} />
               </CardContent>
             </Card>
             <Card>
@@ -208,7 +340,7 @@ const Dashboard = () => {
                 <CardTitle>Monthly Net Balance</CardTitle>
               </CardHeader>
               <CardContent className="h-80">
-                <BarChartDisplay data={[]} />
+                <BarChartDisplay data={monthlyData} />
               </CardContent>
             </Card>
           </div>
@@ -218,12 +350,14 @@ const Dashboard = () => {
             <CardHeader>
               <CardTitle>Transactions</CardTitle>
               <CardDescription>
-                Upload statements to see your transactions
+                {isLoading ? "Loading transactions..." : 
+                  transactions.length === 0 ? "Upload statements to see your transactions" : 
+                  `${transactions.length} transactions found`}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <TransactionTable 
-                transactions={[]} 
+                transactions={transactions} 
                 onUpdateCategory={handleUpdateCategory} 
               />
             </CardContent>

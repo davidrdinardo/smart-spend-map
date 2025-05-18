@@ -4,6 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/providers/AuthProvider';
+import { v4 as uuidv4 } from 'uuid';
 
 interface UploadWidgetProps {
   onComplete: () => void;
@@ -17,6 +20,7 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
   
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
@@ -76,6 +80,15 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
   };
   
   const handleUpload = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to upload files.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     if (uploadedFiles.length === 0) {
       toast({
         title: "No files selected",
@@ -87,22 +100,78 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
     
     setIsUploading(true);
     
-    // Simulate upload progress
-    for (let progress = 0; progress <= 100; progress += 5) {
-      await new Promise(resolve => setTimeout(resolve, 200));
-      setUploadProgress(progress);
+    try {
+      const uploads = [];
+      let progressIncrement = 90 / uploadedFiles.length;
+      
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        const file = uploadedFiles[i];
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${uuidv4()}.${fileExt}`;
+        const filePath = `${user.id}/${fileName}`;
+        
+        // Upload to Supabase Storage
+        const { error: uploadError } = await supabase.storage
+          .from('bank_statements')
+          .upload(filePath, file);
+          
+        if (uploadError) {
+          throw new Error(`Error uploading ${file.name}: ${uploadError.message}`);
+        }
+        
+        // Create record in uploads table
+        const { data: uploadData, error: dbError } = await supabase
+          .from('uploads')
+          .insert({
+            user_id: user.id,
+            filename: file.name,
+            file_path: filePath
+          })
+          .select()
+          .single();
+          
+        if (dbError || !uploadData) {
+          throw new Error(`Error recording upload: ${dbError?.message}`);
+        }
+        
+        uploads.push(uploadData);
+        
+        // Update progress
+        setUploadProgress((i + 1) * progressIncrement);
+        
+        // Process the file through our edge function
+        const { error: processError } = await supabase.functions.invoke('process-statement', {
+          body: {
+            fileId: uploadData.id,
+            userId: user.id
+          }
+        });
+        
+        if (processError) {
+          console.error(`Error processing file: ${processError.message}`);
+          // Continue with other files even if processing fails for one
+        }
+      }
+      
+      setUploadProgress(100);
+      
+      // Wait a moment to show 100% progress
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      toast({
+        title: "Upload complete",
+        description: `${uploads.length} files have been processed successfully.`,
+      });
+      
+      onComplete();
+    } catch (error: any) {
+      toast({
+        title: "Upload failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      setIsUploading(false);
     }
-    
-    // Simulate processing time
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    toast({
-      title: "Upload complete",
-      description: `${uploadedFiles.length} files have been processed successfully.`,
-    });
-    
-    setIsUploading(false);
-    onComplete();
   };
   
   const removeFile = (index: number) => {
