@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -469,9 +470,12 @@ serve(async (req) => {
         for (const tx of pdfTransactions) {
           const { date, description, amount } = tx;
           
-          // Correctly identify transaction type: if amount is negative, it's an expense
+          // Determine transaction type based on amount sign
+          // Negative = expense, Positive = income
           const type = amount >= 0 ? 'income' : 'expense';
-          const category = categorizeTransaction(description, amount);
+          
+          // Categorize based on description and type
+          const category = type === 'income' ? 'Income' : categorizeTransaction(description, -1); // For expense categorization we pass -1
           
           // Extract YYYY-MM for month_key
           const monthKey = date.substring(0, 7); // Format: YYYY-MM
@@ -661,8 +665,9 @@ serve(async (req) => {
         // Always use positive values in the database, the type field indicates whether it's an expense
         const amount = Math.abs(parsedAmount);
         
-        // Determine category
-        const category = categorizeTransaction(description, isExpense ? -amount : amount);
+        // Determine category - for income, always use Income category
+        // For expenses, use category detection
+        const category = type === 'income' ? 'Income' : categorizeTransaction(description, -1);
         
         // Extract YYYY-MM for month_key
         const monthKey = date.substring(0, 7); // Format: YYYY-MM
