@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -24,8 +23,8 @@ const categories = {
 function categorizeTransaction(description: string, amount: number): string {
   description = description.toLowerCase();
   
-  // Check for income first
-  if (amount >= 0 || categories.income.some(keyword => description.includes(keyword))) {
+  // Check for income first (deposits are typically positive amounts)
+  if (amount > 0 || categories.income.some(keyword => description.includes(keyword))) {
     return "Income";
   }
   
@@ -470,7 +469,7 @@ serve(async (req) => {
         for (const tx of pdfTransactions) {
           const { date, description, amount } = tx;
           
-          // Determine if income or expense
+          // Correctly identify transaction type: if amount is negative, it's an expense
           const type = amount >= 0 ? 'income' : 'expense';
           const category = categorizeTransaction(description, amount);
           
@@ -481,7 +480,7 @@ serve(async (req) => {
             user_id: userId,
             date,
             description,
-            amount,
+            amount: Math.abs(amount), // Store absolute value in database
             type,
             category,
             month_key: monthKey,
@@ -557,6 +556,16 @@ serve(async (req) => {
         columnIndices = detectHeaderColumns(headerLine);
         startIndex = 1; // Skip header row when processing
         console.log("Using header line to determine columns:", headerLine);
+        
+        // Special case for bank statements with 'Withdrawals' and 'Deposits' columns
+        const headers = headerLine.toLowerCase().split(delimiter).map(h => h.trim());
+        const withdrawalsIndex = headers.findIndex(h => h.includes('withdraw'));
+        const depositsIndex = headers.findIndex(h => h.includes('deposit'));
+        
+        if (withdrawalsIndex >= 0 && depositsIndex >= 0) {
+          console.log("Detected withdrawals and deposits columns");
+          columnIndices.amountIndex = -1; // Special marker to handle two amount columns
+        }
       } else {
         console.log("No header detected, using default column order");
       }
@@ -593,7 +602,36 @@ serve(async (req) => {
         
         const dateField = fields[columnIndices.dateIndex];
         const descriptionField = fields[columnIndices.descriptionIndex];
-        const amountField = fields[columnIndices.amountIndex];
+        
+        // Special handling for withdrawals and deposits columns
+        let amountField;
+        let isExpense = false;
+        
+        if (columnIndices.amountIndex === -1) {
+          // Special case with separate withdrawals and deposits columns
+          const headers = headerLine.toLowerCase().split(delimiter).map(h => h.trim());
+          const withdrawalsIndex = headers.findIndex(h => h.includes('withdraw'));
+          const depositsIndex = headers.findIndex(h => h.includes('deposit'));
+          
+          const withdrawalAmount = fields[withdrawalsIndex]?.trim();
+          const depositAmount = fields[depositsIndex]?.trim();
+          
+          if (withdrawalAmount && withdrawalAmount !== '0' && withdrawalAmount !== '0.0' && withdrawalAmount !== '0.00') {
+            amountField = withdrawalAmount;
+            isExpense = true;
+          } else if (depositAmount && depositAmount !== '0' && depositAmount !== '0.0' && depositAmount !== '0.00') {
+            amountField = depositAmount;
+            isExpense = false;
+          } else {
+            console.log(`Skipping line ${i+1}: No valid amount found in withdrawals/deposits`);
+            skippedLinesCount++;
+            continue;
+          }
+        } else {
+          amountField = fields[columnIndices.amountIndex];
+          // Standard way of determining expense/income - needs detection from context
+          // Let's determine later after parsing the amount
+        }
         
         // Skip if any essential field is missing
         if (!dateField || !descriptionField || !amountField) {
@@ -604,17 +642,27 @@ serve(async (req) => {
         
         const date = parseDate(dateField);
         const description = descriptionField.trim();
-        const amount = parseAmount(amountField);
+        const parsedAmount = parseAmount(amountField);
         
-        if (amount === null) {
+        if (parsedAmount === null) {
           console.log(`Skipping line ${i+1} due to invalid amount: ${amountField}`);
           skippedLinesCount++;
           continue;
         }
         
+        // For standard columns, expense is indicated by negative amount or withdrawal position
+        if (columnIndices.amountIndex !== -1) {
+          isExpense = parsedAmount < 0;
+        }
+        
         // Determine if income or expense
-        const type = amount >= 0 ? 'income' : 'expense';
-        const category = categorizeTransaction(description, amount);
+        const type = isExpense ? 'expense' : 'income';
+        
+        // Always use positive values in the database, the type field indicates whether it's an expense
+        const amount = Math.abs(parsedAmount);
+        
+        // Determine category
+        const category = categorizeTransaction(description, isExpense ? -amount : amount);
         
         // Extract YYYY-MM for month_key
         const monthKey = date.substring(0, 7); // Format: YYYY-MM
