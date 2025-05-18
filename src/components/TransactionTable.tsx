@@ -31,11 +31,12 @@ export const TransactionTable = ({ transactions, onUpdateCategory }: Transaction
   const [sortField, setSortField] = useState<'date' | 'amount'>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   
-  // Define available categories for the dropdown
+  // Define available categories for the dropdown with more detailed options
   const categories = [
-    "Housing", "Transportation", "Groceries", "Dining Out", "Utilities", 
-    "Subscriptions", "Healthcare", "Insurance", "Entertainment", 
-    "Travel", "Personal Care", "Gifts/Donations", "Savings", "Shopping", "Other"
+    "Housing", "Utilities", "Groceries", "Dining Out", "Transportation", 
+    "Healthcare", "Entertainment", "Shopping", "Subscriptions", "PersonalCare",
+    "Education", "Childcare", "Pets", "Travel", "Gifts", 
+    "Taxes", "Insurance", "Debt", "Savings", "Other"
   ];
   
   // Filter transactions based on search term
