@@ -1,3 +1,4 @@
+
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -115,16 +116,24 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
       
       // Check if the file contains essential data columns
       const firstLine = lines[0].toLowerCase();
-      const hasHeader = firstLine.includes('date') || firstLine.includes('desc') || firstLine.includes('amount') || 
-                        firstLine.includes('withdraw') || firstLine.includes('deposit');
       
-      // If no header, ensure we have at least 3 fields in the first line
-      if (!hasHeader) {
+      // Improved header detection for withdrawal/deposit format
+      const hasWithdrawalDepositFormat = 
+        (firstLine.includes('withdraw') && firstLine.includes('deposit')) || 
+        (firstLine.includes('debit') && firstLine.includes('credit'));
+      
+      const hasStandardFormat = 
+        firstLine.includes('date') && 
+        (firstLine.includes('desc') || firstLine.includes('name') || firstLine.includes('transaction')) &&
+        firstLine.includes('amount');
+      
+      if (!hasWithdrawalDepositFormat && !hasStandardFormat) {
+        // Check if it has enough columns
         const fields = lines[0].split(/[,\t]/).filter(f => f.trim());
         if (fields.length < 3) {
           toast({
             title: "Invalid CSV format", 
-            description: "File does not contain enough columns. Expected at least date, description, and amount.",
+            description: "File does not contain expected columns. Expected date, description, and either amount or withdrawal/deposit columns.",
             variant: "destructive",
           });
           return false;
@@ -149,7 +158,7 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
         toast({
           title: "CSV format warning",
           description: "File may not contain properly formatted transaction data. Processing will be attempted anyway.",
-          variant: "destructive",
+          variant: "warning",
         });
         // We return true anyway and let the backend try to process it
       }
@@ -479,7 +488,7 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
                     Supported formats: PDF, CSV, TSV, TXT
                   </p>
                   <p className="mt-1 text-xs text-gray-500">
-                    CSV format should have date, description, and amount columns
+                    CSV format should have date, description, and either amount or withdrawal/deposit columns
                   </p>
                 </div>
               </div>

@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -582,20 +583,32 @@ serve(async (req) => {
           const withdrawalStr = fields[columnIndices.withdrawalIndex]?.trim();
           const depositStr = fields[columnIndices.depositIndex]?.trim();
           
-          const withdrawalAmount = withdrawalStr ? parseAmount(withdrawalStr) : null;
-          const depositAmount = depositStr ? parseAmount(depositStr) : null;
+          console.log(`Line ${i+1}: Processing withdrawal: "${withdrawalStr}", deposit: "${depositStr}"`);
           
-          console.log(`Line ${i+1}: Found withdrawal: ${withdrawalAmount}, deposit: ${depositAmount}`);
-          
-          if (withdrawalAmount && withdrawalAmount > 0) {
-            amount = withdrawalAmount;
-            isExpense = true;
-            console.log(`Line ${i+1}: Using withdrawal amount as EXPENSE: ${amount}`);
+          // Fixed: Correctly determine transaction type based on which column has a value
+          if (withdrawalStr && withdrawalStr !== '' && withdrawalStr !== '0' && withdrawalStr !== '0.00') {
+            // It's a withdrawal (expense)
+            amount = parseAmount(withdrawalStr);
+            if (amount !== null && amount > 0) {
+              isExpense = true;
+              console.log(`Line ${i+1}: Using withdrawal amount as EXPENSE: ${amount}`);
+            } else {
+              console.log(`Line ${i+1}: Invalid withdrawal amount: ${withdrawalStr}`);
+              skippedLinesCount++;
+              continue;
+            }
           } 
-          else if (depositAmount && depositAmount > 0) {
-            amount = depositAmount;
-            isExpense = false;
-            console.log(`Line ${i+1}: Using deposit amount as INCOME: ${amount}`);
+          else if (depositStr && depositStr !== '' && depositStr !== '0' && depositStr !== '0.00') {
+            // It's a deposit (income)
+            amount = parseAmount(depositStr);
+            if (amount !== null && amount > 0) {
+              isExpense = false;
+              console.log(`Line ${i+1}: Using deposit amount as INCOME: ${amount}`);
+            } else {
+              console.log(`Line ${i+1}: Invalid deposit amount: ${depositStr}`);
+              skippedLinesCount++;
+              continue;
+            }
           }
           else {
             console.log(`Skipping line ${i+1}: No valid withdrawal or deposit amount found`);
