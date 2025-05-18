@@ -13,6 +13,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertCircle, Info } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useAuth } from "@/providers/AuthProvider";
 
 const formSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -22,36 +23,20 @@ const formSchema = z.object({
 const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [showDebugDialog, setShowDebugDialog] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>({});
   const [authError, setAuthError] = useState<string | null>(null);
-  const [checkingAuth, setCheckingAuth] = useState(true);
   
   // Check if user is already logged in
   useEffect(() => {
-    const checkUser = async () => {
-      try {
-        setCheckingAuth(true);
-        const { data } = await supabase.auth.getSession();
-        
-        if (data.session?.user) {
-          console.log("User found in Auth.tsx, navigating to dashboard");
-          // Add a delay to prevent potential race conditions with auth state changes
-          setTimeout(() => {
-            navigate('/dashboard', { replace: true });
-          }, 100);
-        }
-      } catch (error) {
-        console.error("Error checking user session:", error);
-      } finally {
-        setCheckingAuth(false);
-      }
-    };
-    
-    checkUser();
-  }, [navigate]);
+    if (!authLoading && user) {
+      console.log("User is already logged in, redirecting to dashboard");
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, authLoading, navigate]);
 
   // Check auth state when component mounts
   useEffect(() => {
@@ -251,7 +236,8 @@ const Auth = () => {
     }
   };
 
-  if (checkingAuth) {
+  // Show loading while checking auth state
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -261,6 +247,9 @@ const Auth = () => {
       </div>
     );
   }
+
+  // If user is authenticated, they'll be redirected by the useEffect
+  // This renders the login form
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">

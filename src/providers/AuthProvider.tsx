@@ -74,7 +74,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error("Error getting/refreshing session:", error);
         }
         
-        console.log("Initial session check:", data.session?.user?.id);
+        if (data.session) {
+          console.log("Initial session check:", data.session.user?.id);
+        } else {
+          console.log("No session found during initial check");
+        }
         
         if (isMounted) {
           setSession(data.session);

@@ -86,3 +86,15 @@ export const refreshSessionIfNeeded = async () => {
   
   return { data, error };
 };
+
+// Clear session completely (for troubleshooting)
+export const clearSupabaseSession = () => {
+  try {
+    localStorage.removeItem('sb-moneymap-auth-token');
+    console.log("Supabase session storage cleared");
+    return true;
+  } catch (e) {
+    console.error("Failed to clear Supabase session:", e);
+    return false;
+  }
+};

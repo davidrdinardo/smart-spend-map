@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -36,8 +37,11 @@ const Dashboard = () => {
   
   // Check for authentication
   useEffect(() => {
+    console.log("Dashboard checking auth:", { user, isLoading: loading });
+    
     if (!loading && !user) {
-      navigate('/auth');
+      console.log("No user found in Dashboard, redirecting to auth page");
+      navigate('/auth', { replace: true });
     }
   }, [user, loading, navigate]);
   
@@ -56,11 +60,13 @@ const Dashboard = () => {
   }, [selectedMonth, user]);
   
   const fetchAvailableMonths = async () => {
+    if (!user) return;
+    
     try {
       const { data, error } = await supabase
         .from('transactions')
         .select('month_key')
-        .eq('user_id', user!.id)
+        .eq('user_id', user.id)
         .order('month_key', { ascending: false });
         
       if (error) throw error;
@@ -105,6 +111,8 @@ const Dashboard = () => {
   };
   
   const fetchMonthData = async (monthKey: string) => {
+    if (!user) return;
+    
     setIsLoading(true);
     console.log("Fetching data for month:", monthKey);
     
@@ -113,7 +121,7 @@ const Dashboard = () => {
       const { data: transactionData, error: transactionError } = await supabase
         .from('transactions')
         .select('*')
-        .eq('user_id', user!.id)
+        .eq('user_id', user.id)
         .eq('month_key', monthKey)
         .order('date', { ascending: false });
         
@@ -167,7 +175,7 @@ const Dashboard = () => {
       const { data: monthlyRaw, error: monthlyError } = await supabase
         .from('transactions')
         .select('month_key, amount, type')
-        .eq('user_id', user!.id)
+        .eq('user_id', user.id)
         .order('month_key', { ascending: true });
         
       if (monthlyError) throw monthlyError;
@@ -304,6 +312,20 @@ const Dashboard = () => {
         <div className="text-center">
           <h2 className="text-2xl font-semibold mb-2">Loading...</h2>
           <p className="text-gray-600">Please wait while we load your financial dashboard.</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-semibold mb-2">Authentication Required</h2>
+          <p className="text-gray-600 mb-4">You need to be logged in to view this page.</p>
+          <Button onClick={() => navigate('/auth')} className="bg-income hover:bg-income-dark">
+            Go to Login
+          </Button>
         </div>
       </div>
     );
