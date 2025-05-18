@@ -19,6 +19,7 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [status, setStatus] = useState<string>('');
+  const [processingResult, setProcessingResult] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -46,13 +47,14 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
       const fileType = file.type.toLowerCase();
       const fileExt = file.name.split('.').pop()?.toLowerCase();
       
-      if (fileType === 'application/pdf' || fileType === 'text/csv' || fileExt === 'pdf' || fileExt === 'csv') {
+      if (fileType === 'application/pdf' || fileType === 'text/csv' || fileType === 'text/tab-separated-values' || 
+          fileExt === 'pdf' || fileExt === 'csv' || fileExt === 'tsv' || fileExt === 'txt') {
         return true;
       }
       
       toast({
         title: "Invalid file type",
-        description: `${file.name} is not a PDF or CSV file.`,
+        description: `${file.name} is not a supported file type. Please use PDF, CSV, TSV, or TXT files.`,
         variant: "destructive",
       });
       
@@ -100,10 +102,12 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
     }
     
     setIsUploading(true);
+    setProcessingResult(null);
     
     try {
       const uploads = [];
       let progressIncrement = 90 / uploadedFiles.length;
+      let totalTransactionsImported = 0;
       
       for (let i = 0; i < uploadedFiles.length; i++) {
         setStatus(`Uploading file ${i+1} of ${uploadedFiles.length}`);
@@ -145,6 +149,8 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
         
         // Process the file through our edge function
         setStatus(`Processing file ${file.name}...`);
+        console.log(`Processing file ${uploadData.id} for user ${user.id}`);
+        
         const { data, error: processError } = await supabase.functions.invoke('process-statement', {
           body: {
             fileId: uploadData.id,
@@ -162,6 +168,11 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
           // Continue with other files even if processing fails for one
         } else {
           console.log("Processing response:", data);
+          
+          if (data?.details?.inserted_transactions) {
+            totalTransactionsImported += data.details.inserted_transactions;
+          }
+          
           toast({
             title: "File processed",
             description: `${data?.message || "File processed successfully"}`,
@@ -170,14 +181,17 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
       }
       
       setUploadProgress(100);
-      setStatus(`Finalizing...`);
+      setStatus(`Processing complete!`);
+      
+      const resultMessage = `Successfully imported ${totalTransactionsImported} transactions from ${uploads.length} file${uploads.length !== 1 ? 's' : ''}.`;
+      setProcessingResult(resultMessage);
       
       // Wait a moment to show 100% progress
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
       toast({
         title: "Upload complete",
-        description: `${uploads.length} files have been processed successfully.`,
+        description: resultMessage,
       });
       
       onComplete();
@@ -188,6 +202,7 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
         variant: "destructive",
       });
       setIsUploading(false);
+      setProcessingResult(`Error: ${error.message}`);
     }
   };
   
@@ -201,7 +216,7 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
         <CardHeader>
           <CardTitle>Upload Statements</CardTitle>
           <CardDescription>
-            Drag and drop your bank and credit card statements in PDF or CSV format.
+            Drag and drop your bank and credit card statements in PDF, CSV, TSV, or TXT format.
           </CardDescription>
         </CardHeader>
         
@@ -250,12 +265,12 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
                     ref={fileInputRef}
                     type="file"
                     className="hidden"
-                    accept=".pdf,.csv"
+                    accept=".pdf,.csv,.tsv,.txt"
                     multiple
                     onChange={handleFileInputChange}
                   />
                   <p className="mt-2 text-xs text-gray-500">
-                    Only PDF and CSV files are accepted
+                    Supported formats: PDF, CSV, TSV, TXT
                   </p>
                 </div>
               </div>
@@ -264,11 +279,16 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
             <div className="py-8 space-y-6">
               <p className="text-center font-medium">{status || "Processing files..."}</p>
               <Progress value={uploadProgress} className="h-2 w-full" />
-              <p className="text-center text-sm text-gray-500">
-                {uploadProgress < 100 
-                  ? `Uploading and processing ${uploadedFiles.length} files...` 
-                  : 'Finalizing transaction data...'}
-              </p>
+              
+              {processingResult ? (
+                <p className="text-center text-sm font-medium text-green-600">{processingResult}</p>
+              ) : (
+                <p className="text-center text-sm text-gray-500">
+                  {uploadProgress < 100 
+                    ? `Uploading and processing ${uploadedFiles.length} files...` 
+                    : 'Finalizing transaction data...'}
+                </p>
+              )}
             </div>
           )}
           

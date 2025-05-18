@@ -17,6 +17,8 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Transaction } from '@/types';
+import { AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface TransactionTableProps {
   transactions: Transaction[];
@@ -49,6 +51,17 @@ export const TransactionTable = ({ transactions, onUpdateCategory }: Transaction
           className="max-w-sm"
         />
       </div>
+      
+      {transactions.length === 0 && (
+        <Alert className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>No transactions found</AlertTitle>
+          <AlertDescription>
+            Try uploading a bank statement or credit card statement to see your transactions here.
+            Make sure your file contains transaction data in a structured format.
+          </AlertDescription>
+        </Alert>
+      )}
       
       <div className="rounded-md border overflow-hidden">
         <Table>
