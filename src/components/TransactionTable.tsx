@@ -119,23 +119,23 @@ export const TransactionTable = ({ transactions, onUpdateCategory }: Transaction
                     <TableCell>{transaction.date}</TableCell>
                     <TableCell>{transaction.description}</TableCell>
                     <TableCell 
-                      className={`font-medium ${transaction.amount >= 0 ? 'text-income-dark' : 'text-expense-dark'}`}
+                      className={`font-medium ${transaction.type === 'income' ? 'text-income-dark' : 'text-expense-dark'}`}
                     >
                       ${Math.abs(transaction.amount).toFixed(2)}
                     </TableCell>
                     <TableCell>
                       <span 
                         className={`inline-block px-2 py-1 rounded-full text-xs ${
-                          transaction.amount >= 0 
+                          transaction.type === 'income'
                             ? 'bg-income-light/20 text-income-dark' 
                             : 'bg-expense-light/20 text-expense-dark'
                         }`}
                       >
-                        {transaction.amount >= 0 ? 'Income' : 'Expense'}
+                        {transaction.type === 'income' ? 'Income' : 'Expense'}
                       </span>
                     </TableCell>
                     <TableCell>
-                      {transaction.amount >= 0 ? (
+                      {transaction.type === 'income' ? (
                         'Income'
                       ) : (
                         <Select 
