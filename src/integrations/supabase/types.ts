@@ -54,6 +54,7 @@ export type Database = {
           filename: string
           id: string
           processed: boolean
+          statement_month: string | null
           uploaded_at: string
           user_id: string
         }
@@ -62,6 +63,7 @@ export type Database = {
           filename: string
           id?: string
           processed?: boolean
+          statement_month?: string | null
           uploaded_at?: string
           user_id: string
         }
@@ -70,6 +72,7 @@ export type Database = {
           filename?: string
           id?: string
           processed?: boolean
+          statement_month?: string | null
           uploaded_at?: string
           user_id?: string
         }
