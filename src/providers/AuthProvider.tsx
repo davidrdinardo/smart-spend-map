@@ -1,5 +1,5 @@
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase, checkAuthState, refreshSessionIfNeeded } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
@@ -20,17 +20,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
+  const mountedRef = useRef(false);
   
   useEffect(() => {
-    console.log("AuthProvider: Setting up auth state listener");
-    let isMounted = true;
+    // Set mount state
+    mountedRef.current = true;
     
-    // Function to handle session update
+    console.log("AuthProvider: Setting up auth state listener");
+    
+    // Function to handle session update - synchronous to avoid loops
     const handleSessionUpdate = (newSession: Session | null) => {
-      if (!isMounted) return;
+      if (!mountedRef.current) return;
+      
+      console.log("Updating auth state:", { 
+        hasUser: !!newSession?.user,
+        userEmail: newSession?.user?.email
+      });
+      
       setSession(newSession);
       setUser(newSession?.user ?? null);
-      setLoading(false);
     };
     
     // Set up auth state listener first
@@ -38,20 +46,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       (event, newSession) => {
         console.log("Auth state changed:", event, newSession?.user?.id);
         
-        if (!isMounted) return;
+        if (!mountedRef.current) return;
         
         if (event === 'SIGNED_IN') {
           handleSessionUpdate(newSession);
-          toast({
-            title: "Signed in successfully",
-            description: `Welcome ${newSession?.user?.email}`,
-          });
+          // Don't show toast during initial loading
+          if (initialized) {
+            toast({
+              title: "Signed in successfully",
+              description: `Welcome ${newSession?.user?.email}`,
+            });
+          }
         } else if (event === 'SIGNED_OUT') {
           handleSessionUpdate(null);
-          toast({
-            title: "Signed out",
-            description: "You have been signed out",
-          });
+          // Only show toast if we were previously initialized
+          if (initialized) {
+            toast({
+              title: "Signed out",
+              description: "You have been signed out",
+            });
+          }
         } else if (event === 'TOKEN_REFRESHED') {
           console.log("Token refreshed successfully");
           handleSessionUpdate(newSession);
@@ -65,7 +79,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Then check for existing session
     const getInitialSession = async () => {
       try {
-        if (!isMounted) return;
+        if (!mountedRef.current) return;
+        
+        console.log("Checking for initial session...");
         
         // Check for session and refresh if needed
         const { data, error } = await refreshSessionIfNeeded();
@@ -75,30 +91,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         
         if (data.session) {
-          console.log("Initial session check:", data.session.user?.id);
+          console.log("Initial session found:", data.session.user?.id);
+          handleSessionUpdate(data.session);
         } else {
           console.log("No session found during initial check");
         }
         
-        if (isMounted) {
-          setSession(data.session);
-          setUser(data.session?.user ?? null);
+        // Always mark as not loading once we've checked
+        if (mountedRef.current) {
           setLoading(false);
           setInitialized(true);
         }
       } catch (error) {
         console.error("Exception during initial session check:", error);
-        if (isMounted) {
+        if (mountedRef.current) {
           setLoading(false);
           setInitialized(true);
         }
       }
     };
     
+    // Run the initial session check
     getInitialSession();
     
     return () => {
-      isMounted = false;
+      mountedRef.current = false;
       subscription.unsubscribe();
     };
   }, []);

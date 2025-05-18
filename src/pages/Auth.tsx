@@ -1,6 +1,5 @@
-
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +21,7 @@ const formSchema = z.object({
 
 const Auth = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -30,15 +30,17 @@ const Auth = () => {
   const [debugInfo, setDebugInfo] = useState<any>({});
   const [authError, setAuthError] = useState<string | null>(null);
   
-  // Check if user is already logged in
+  // We no longer need this check as it's handled by the PublicRoute component
+  // But keep the debug logging for troubleshooting
   useEffect(() => {
-    if (!authLoading && user) {
-      console.log("User is already logged in, redirecting to dashboard");
-      navigate('/dashboard', { replace: true });
-    }
-  }, [user, authLoading, navigate]);
+    console.log("Auth page state:", {
+      user: !!user,
+      authLoading,
+      path: location.pathname
+    });
+  }, [user, authLoading, location]);
 
-  // Check auth state when component mounts
+  // Check auth state when component mounts for debugging
   useEffect(() => {
     const runAuthCheck = async () => {
       try {
@@ -124,12 +126,7 @@ const Auth = () => {
           });
           
           // Only navigate if session exists (user is auto-confirmed)
-          if (signupData.session) {
-            // Add a small delay to ensure auth state is updated
-            setTimeout(() => {
-              navigate('/dashboard', { replace: true });
-            }, 500);
-          }
+          // Let the PublicRoute handle redirect based on auth state
         }
       } else {
         // Sign in logic
@@ -170,10 +167,8 @@ const Auth = () => {
             description: "Welcome back!",
           });
           
-          // Add a small delay to ensure auth state is fully processed
-          setTimeout(() => {
-            navigate('/dashboard', { replace: true });
-          }, 500);
+          // No need to navigate - PublicRoute component will handle this
+          // when the auth state changes
         }
       }
     } catch (error: any) {
@@ -194,7 +189,10 @@ const Auth = () => {
           currentState: {
             timestamp: new Date().toISOString(),
             localStorage: debugSupabaseSession(),
-            authState
+            authState,
+            userId: user?.id,
+            isUserLoading: authLoading,
+            currentPath: location.pathname
           }
         }));
         setShowDebugDialog(true);
@@ -236,19 +234,20 @@ const Auth = () => {
     }
   };
 
-  // Show loading while checking auth state
+  // This is now handled by the PublicRoute wrapper in App.tsx
+  // We'll keep a minimal loading state for consistency
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <h2 className="text-xl font-medium mb-2">Checking authentication...</h2>
+          <h2 className="text-xl font-medium mb-2">Authenticating...</h2>
           <p className="text-gray-600">Please wait a moment...</p>
         </div>
       </div>
     );
   }
 
-  // If user is authenticated, they'll be redirected by the useEffect
+  // If user is authenticated, they'll be redirected by the PublicRoute wrapper
   // This renders the login form
 
   return (
