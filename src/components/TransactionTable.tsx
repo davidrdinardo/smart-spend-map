@@ -29,7 +29,7 @@ import { Transaction } from '@/types';
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { categories } from 'supabase/functions/process-statement/utils/categories';
+import { categories } from '@/utils/categories';
 
 interface TransactionTableProps {
   transactions: Transaction[];
