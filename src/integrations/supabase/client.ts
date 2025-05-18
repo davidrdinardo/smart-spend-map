@@ -31,11 +31,34 @@ export const checkAuthState = async () => {
     console.log("Current auth state:", {
       hasSession: !!data.session,
       sessionExpiresAt: data.session?.expires_at,
-      error: error?.message
+      error: error?.message,
+      user: data.session?.user?.id
     });
+    
+    // Check local storage for auth data
+    const authData = localStorage.getItem('sb-moneymap-auth-token');
+    console.log("Auth data in localStorage:", !!authData);
+    
     return { session: data.session, error };
   } catch (err) {
     console.error("Error checking auth state:", err);
     return { session: null, error: err };
   }
+};
+
+// Enhanced debug helper
+export const debugSupabaseSession = () => {
+  const lsData = localStorage.getItem('sb-moneymap-auth-token');
+  let parsedData = null;
+  try {
+    parsedData = lsData ? JSON.parse(lsData) : null;
+  } catch (e) {
+    console.error("Error parsing localStorage auth data:", e);
+  }
+  
+  return {
+    hasLocalStorage: !!lsData,
+    parsedData,
+    currentTimestamp: new Date().toISOString()
+  };
 };

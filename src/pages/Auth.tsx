@@ -4,15 +4,16 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, checkAuthState, debugSupabaseSession } from '@/integrations/supabase/client';
 import { useAuth } from '@/providers/AuthProvider';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertCircle, Info } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const formSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -26,7 +27,8 @@ const Auth = () => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [showDebugDialog, setShowDebugDialog] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>({});
-  const { user } = useAuth();
+  const [authError, setAuthError] = useState<string | null>(null);
+  const { user, refreshSession, authDebugInfo } = useAuth();
   
   // Redirect if already logged in
   useEffect(() => {
@@ -34,6 +36,24 @@ const Auth = () => {
       navigate('/dashboard');
     }
   }, [user, navigate]);
+
+  // Check auth state when component mounts
+  useEffect(() => {
+    const runAuthCheck = async () => {
+      const stateInfo = await checkAuthState();
+      console.log("Auth page initial state check:", stateInfo);
+      setDebugInfo(prev => ({
+        ...prev, 
+        initialCheck: {
+          timestamp: new Date().toISOString(),
+          hasSession: !!stateInfo.session,
+          sessionExpiresAt: stateInfo.session?.expires_at
+        }
+      }));
+    };
+    
+    runAuthCheck();
+  }, []);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -45,11 +65,16 @@ const Auth = () => {
 
   const handleAuth = async (data: z.infer<typeof formSchema>) => {
     setLoading(true);
+    setAuthError(null);
     const { email, password } = data;
     
     try {
       console.log("Auth attempt with email:", email);
-      setDebugInfo({ email, timestamp: new Date().toISOString() });
+      setDebugInfo({ 
+        email, 
+        timestamp: new Date().toISOString(),
+        localStorage: debugSupabaseSession()
+      });
       
       if (isSignUp) {
         // Sign up logic
@@ -57,21 +82,42 @@ const Auth = () => {
         const { data: signupData, error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            emailRedirectTo: window.location.origin + '/dashboard'
+          }
         });
         
         if (error) {
           console.error("Signup error:", error);
-          setDebugInfo(prev => ({...prev, error: { type: "signup", message: error.message, code: error.code }}));
+          setAuthError(error.message);
+          setDebugInfo(prev => ({
+            ...prev, 
+            error: { 
+              type: "signup", 
+              message: error.message, 
+              code: error.code 
+            }
+          }));
           throw error;
         }
         
         if (signupData?.user) {
           console.log("Signup successful, user:", signupData.user.id);
-          setDebugInfo(prev => ({...prev, success: { userId: signupData.user?.id }}));
-          toast({
-            title: "Sign up successful!",
-            description: "Please check your email for the confirmation link.",
-          });
+          setDebugInfo(prev => ({
+            ...prev, 
+            success: { 
+              userId: signupData.user?.id,
+              sessionExists: !!signupData.session
+            }
+          }));
+          
+          // Add a small delay to let supabase finish processing
+          setTimeout(() => {
+            toast({
+              title: "Sign up successful!",
+              description: "Please check your email for the confirmation link.",
+            });
+          }, 500);
         }
       } else {
         // Sign in logic
@@ -83,26 +129,70 @@ const Auth = () => {
         
         if (error) {
           console.error("Login error:", error);
-          setDebugInfo(prev => ({...prev, error: { type: "login", message: error.message, code: error.code }}));
+          setAuthError(error.message);
+          setDebugInfo(prev => ({
+            ...prev, 
+            error: { 
+              type: "login", 
+              message: error.message, 
+              code: error.code 
+            }
+          }));
           throw error;
         }
         
         if (signinData?.user) {
           console.log("Login successful, user:", signinData.user.id);
           console.log("Session:", signinData.session);
-          setDebugInfo(prev => ({...prev, success: { userId: signinData.user?.id, session: !!signinData.session }}));
-          navigate('/dashboard');
+          setDebugInfo(prev => ({
+            ...prev, 
+            success: { 
+              userId: signinData.user?.id, 
+              session: !!signinData.session,
+              sessionExpires: signinData.session?.expires_at
+            }
+          }));
+          
+          // Add a small delay to ensure session is fully processed
+          setTimeout(() => {
+            navigate('/dashboard');
+          }, 500);
         }
       }
     } catch (error: any) {
       console.error("Auth error:", error);
-      toast({
-        title: "Authentication failed",
-        description: error?.message || "An unexpected error occurred",
-        variant: "destructive",
-      });
+      setAuthError(error?.message || "An unexpected error occurred");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDebugClick = () => {
+    // Update debug info with current state
+    setDebugInfo(prev => ({
+      ...prev,
+      currentState: {
+        timestamp: new Date().toISOString(),
+        localStorage: debugSupabaseSession(),
+        authContext: authDebugInfo()
+      }
+    }));
+    setShowDebugDialog(true);
+  };
+
+  const handleTestRefresh = async () => {
+    try {
+      await refreshSession();
+      // Update debug info after refresh
+      setDebugInfo(prev => ({
+        ...prev,
+        refreshAttempt: {
+          timestamp: new Date().toISOString(),
+          authContext: authDebugInfo()
+        }
+      }));
+    } catch (error) {
+      console.error("Test refresh failed:", error);
     }
   };
 
@@ -119,6 +209,14 @@ const Auth = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {authError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Authentication Error</AlertTitle>
+              <AlertDescription>{authError}</AlertDescription>
+            </Alert>
+          )}
+          
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleAuth)} className="space-y-4">
               <FormField
@@ -171,18 +269,31 @@ const Auth = () => {
                 <button
                   type="button"
                   className="text-sm text-gray-600 hover:underline"
-                  onClick={() => setIsSignUp(!isSignUp)}
+                  onClick={() => {
+                    setIsSignUp(!isSignUp);
+                    setAuthError(null);
+                  }}
                 >
                   {isSignUp ? 'Already have an account? Sign in' : 'Need an account? Sign up'}
                 </button>
               </div>
-              <div className="text-center mt-2">
+              
+              <div className="flex justify-center gap-4 mt-2">
                 <button
                   type="button"
-                  className="text-xs text-gray-400 hover:underline"
-                  onClick={() => setShowDebugDialog(true)}
+                  className="text-xs text-gray-400 flex items-center gap-1 hover:underline"
+                  onClick={handleDebugClick}
                 >
+                  <Info size={12} />
                   Debug Info
+                </button>
+                <button
+                  type="button"
+                  className="text-xs text-gray-400 flex items-center gap-1 hover:underline"
+                  onClick={handleTestRefresh}
+                >
+                  <AlertCircle size={12} />
+                  Test Refresh
                 </button>
               </div>
             </form>
@@ -191,17 +302,32 @@ const Auth = () => {
       </Card>
       
       <Dialog open={showDebugDialog} onOpenChange={setShowDebugDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Authentication Debug Info</DialogTitle>
             <DialogDescription>
               Technical details to help diagnose auth issues.
             </DialogDescription>
           </DialogHeader>
-          <div className="mt-4 bg-gray-50 p-4 rounded overflow-auto max-h-[300px]">
+          <div className="mt-4 bg-gray-50 p-4 rounded overflow-auto max-h-[500px]">
             <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(debugInfo, null, 2)}</pre>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex justify-between">
+            <Button 
+              variant="outline"
+              onClick={async () => {
+                const authState = await checkAuthState();
+                setDebugInfo(prev => ({
+                  ...prev,
+                  manualCheck: {
+                    timestamp: new Date().toISOString(),
+                    authState
+                  }
+                }));
+              }}
+            >
+              Refresh Info
+            </Button>
             <Button onClick={() => setShowDebugDialog(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
