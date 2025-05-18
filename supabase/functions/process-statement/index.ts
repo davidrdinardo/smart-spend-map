@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -84,7 +83,25 @@ function detectHeaderColumns(headerLine: string): {dateIndex: number, descriptio
     h.includes('amount') || h.includes('sum') || h.includes('price') || h.includes('value')
   );
   
-  console.log("Column indices - date:", dateIndex, "description:", descriptionIndex, "amount:", amountIndex);
+  // Special case for withdrawal/deposit format
+  const withdrawalIndex = headers.findIndex(h => 
+    h.includes('withdrawal') || h.includes('debit') || h.includes('withdraw')
+  );
+  const depositIndex = headers.findIndex(h => 
+    h.includes('deposit') || h.includes('credit')
+  );
+  
+  console.log("Column indices - date:", dateIndex, "description:", descriptionIndex, 
+              "amount:", amountIndex, "withdrawals:", withdrawalIndex, "deposits:", depositIndex);
+  
+  // If we have withdrawal and deposit columns, set a special flag
+  if (withdrawalIndex >= 0 && depositIndex >= 0) {
+    return {
+      dateIndex: dateIndex >= 0 ? dateIndex : 0,
+      descriptionIndex: descriptionIndex >= 0 ? descriptionIndex : 1,
+      amountIndex: -1 // Special marker to indicate we need to use withdrawalIndex and depositIndex
+    };
+  }
   
   return {
     dateIndex: dateIndex >= 0 ? dateIndex : 0,
@@ -589,22 +606,16 @@ serve(async (req) => {
       let columnIndices = { dateIndex: 0, descriptionIndex: 1, amountIndex: 2 }; // Default
       
       // Detect if first line is a header
-      if (headerLine.toLowerCase().includes('date') || 
+      const isFirstLineHeader = headerLine.toLowerCase().includes('date') || 
           headerLine.toLowerCase().includes('description') || 
-          headerLine.toLowerCase().includes('amount')) {
+          headerLine.toLowerCase().includes('amount') ||
+          headerLine.toLowerCase().includes('withdraw') ||
+          headerLine.toLowerCase().includes('deposit');
+          
+      if (isFirstLineHeader) {
         columnIndices = detectHeaderColumns(headerLine);
         startIndex = 1; // Skip header row when processing
         console.log("Using header line to determine columns:", headerLine);
-        
-        // Special case for bank statements with 'Withdrawals' and 'Deposits' columns
-        const headers = headerLine.toLowerCase().split(delimiter).map(h => h.trim());
-        const withdrawalsIndex = headers.findIndex(h => h.includes('withdraw') || h.includes('debit'));
-        const depositsIndex = headers.findIndex(h => h.includes('deposit') || h.includes('credit'));
-        
-        if (withdrawalsIndex >= 0 && depositsIndex >= 0) {
-          console.log("Detected withdrawals and deposits columns:", withdrawalsIndex, depositsIndex);
-          columnIndices.amountIndex = -1; // Special marker to handle two amount columns
-        }
       } else {
         console.log("No header detected, using default column order");
       }
@@ -740,7 +751,7 @@ serve(async (req) => {
     let insertedCount = 0;
     if (transactions.length > 0) {
       // Insert in smaller batches to avoid payload size issues
-      const BATCH_SIZE = 20;
+      const BATCH_SIZE = 10; // Smaller batch size for more reliability
       
       console.log(`Will insert ${transactions.length} transactions in batches of ${BATCH_SIZE}`);
       
@@ -768,6 +779,9 @@ serve(async (req) => {
             console.error(`Exception in batch ${Math.floor(i / BATCH_SIZE) + 1}:`, batchError);
           }
         }
+        
+        // Small delay between batches to avoid rate limits
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
     } else {
       console.log("No transactions to insert");

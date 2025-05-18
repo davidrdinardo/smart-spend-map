@@ -1,4 +1,3 @@
-
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -65,6 +64,20 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
     
     if (validFiles.length > 0) {
       setUploadedFiles(prev => [...prev, ...validFiles]);
+      console.log(`Added ${validFiles.length} valid files for upload`);
+      
+      // Show a toast confirming files were added
+      if (validFiles.length === 1) {
+        toast({
+          title: "File added",
+          description: `${validFiles[0].name} is ready to upload.`,
+        });
+      } else {
+        toast({
+          title: "Files added",
+          description: `${validFiles.length} files are ready to upload.`,
+        });
+      }
     }
   };
   
@@ -118,6 +131,29 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
         }
       }
       
+      // Try to detect transaction pattern in at least one line
+      let hasTransactionPattern = false;
+      for (let i = 0; i < Math.min(10, lines.length); i++) {
+        const line = lines[i];
+        const commas = (line.match(/,/g) || []).length;
+        const tabs = (line.match(/\t/g) || []).length;
+        
+        // Check if line has appropriate number of delimiters
+        if (commas >= 2 || tabs >= 2) {
+          hasTransactionPattern = true;
+          break;
+        }
+      }
+      
+      if (!hasTransactionPattern) {
+        toast({
+          title: "CSV format warning",
+          description: "File may not contain properly formatted transaction data. Processing will be attempted anyway.",
+          variant: "destructive",
+        });
+        // We return true anyway and let the backend try to process it
+      }
+      
       return true;
     } catch (error) {
       console.error("Error validating CSV:", error);
@@ -128,7 +164,7 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
       });
       return false;
     }
-  }
+  };
   
   const handleUpload = async () => {
     setProcessingError(null);
@@ -182,11 +218,19 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
           }
           
           console.log("Created storage bucket 'bank_statements'");
+          toast({
+            title: "Storage bucket created",
+            description: "Created storage for statement uploads.",
+          });
         }
       } catch (bucketError: any) {
         console.error("Error checking bucket:", bucketError);
+        toast({
+          title: "Storage warning",
+          description: `There was an issue with the storage bucket: ${bucketError.message}`,
+          variant: "destructive",
+        });
         // Continue even if there's an error checking/creating the bucket
-        // The upload will fail if the bucket doesn't exist
       }
       
       const uploads = [];
@@ -315,6 +359,7 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
       // Wait a moment to show 100% progress
       await new Promise(resolve => setTimeout(resolve, 1500));
       
+      // Show final toast message
       if (totalTransactionsImported > 0) {
         toast({
           title: "Upload complete",
