@@ -15,11 +15,21 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from '@/components/ui/input';
 import { Transaction } from '@/types';
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { categories } from 'supabase/functions/process-statement/utils/categories';
 
 interface TransactionTableProps {
   transactions: Transaction[];
@@ -31,13 +41,8 @@ export const TransactionTable = ({ transactions, onUpdateCategory }: Transaction
   const [sortField, setSortField] = useState<'date' | 'amount'>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   
-  // Define available categories for the dropdown with more detailed options
-  const categories = [
-    "Housing", "Utilities", "Groceries", "Dining Out", "Transportation", 
-    "Healthcare", "Entertainment", "Shopping", "Subscriptions", "PersonalCare",
-    "Education", "Childcare", "Pets", "Travel", "Gifts", 
-    "Taxes", "Insurance", "Debt", "Savings", "Other"
-  ];
+  // Get all expense categories from categories.ts
+  const categoryGroups = Object.keys(categories).filter(cat => cat !== 'income');
   
   // Filter transactions based on search term
   const filteredTransactions = transactions.filter(tx => 
@@ -139,21 +144,35 @@ export const TransactionTable = ({ transactions, onUpdateCategory }: Transaction
                       {transaction.type === 'income' ? (
                         'Income'
                       ) : (
-                        <Select 
-                          value={transaction.category} 
-                          onValueChange={(value) => onUpdateCategory(transaction.id, value)}
-                        >
-                          <SelectTrigger className="w-[140px]">
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {categories.map(category => (
-                              <SelectItem key={category} value={category}>
-                                {category}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="w-[140px] justify-between">
+                              {transaction.category}
+                              <span>▼</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className="w-56">
+                            <DropdownMenuLabel>Select Category</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <div className="max-h-[300px] overflow-y-auto">
+                              {categoryGroups.map((categoryGroup) => {
+                                // Format category group name for display (e.g., "diningOut" -> "Dining Out")
+                                const formattedCategoryName = categoryGroup
+                                  .replace(/([A-Z])/g, ' $1')
+                                  .replace(/^./, (str) => str.toUpperCase());
+                                
+                                return (
+                                  <DropdownMenuItem 
+                                    key={categoryGroup}
+                                    onClick={() => onUpdateCategory(transaction.id, formattedCategoryName)}
+                                  >
+                                    {formattedCategoryName}
+                                  </DropdownMenuItem>
+                                );
+                              })}
+                            </div>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       )}
                     </TableCell>
                   </TableRow>

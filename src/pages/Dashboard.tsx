@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -8,6 +7,7 @@ import { format } from 'date-fns';
 import { TransactionTable } from '@/components/TransactionTable';
 import { PieChartDisplay } from '@/components/PieChartDisplay';
 import { BarChartDisplay } from '@/components/BarChartDisplay';
+import { CategoryBreakdownChart } from '@/components/CategoryBreakdownChart';
 import { UploadWidget } from '@/components/UploadWidget';
 import { useToast } from '@/hooks/use-toast';
 import { Transaction, MonthSummary, CategorySummary, MonthData } from '@/types';
@@ -248,7 +248,6 @@ const Dashboard = () => {
     navigate('/auth');
   };
 
-  // New function to clear all transaction data
   const handleClearData = async () => {
     if (!user) return;
     
@@ -392,6 +391,11 @@ const Dashboard = () => {
                 ) : null}
               </CardContent>
             </Card>
+          </div>
+          
+          {/* Expense Breakdown Section */}
+          <div className="mb-8">
+            <CategoryBreakdownChart categoryData={categoryData} />
           </div>
           
           {/* Charts Section */}
