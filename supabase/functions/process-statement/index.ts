@@ -1,6 +1,7 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { parsePdf } from "https://esm.sh/pdf-parse@1.1.1";
+import * as pdfParse from "https://esm.sh/pdf-parse@1.1.1";
 
 // Define common expense categories for classification
 const categories = {
@@ -187,7 +188,8 @@ function looksLikeTransactionLine(line: string): boolean {
 // New function to extract data from PDF files
 async function extractTransactionsFromPDF(buffer: ArrayBuffer): Promise<{ date: string, description: string, amount: number }[]> {
   try {
-    const data = await parsePdf(new Uint8Array(buffer));
+    // Fixed import - use the default export from pdf-parse
+    const data = await pdfParse.default(new Uint8Array(buffer));
     const text = data.text;
     console.log("PDF extracted text sample:", text.substring(0, 500));
     
