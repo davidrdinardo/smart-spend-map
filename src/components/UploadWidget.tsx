@@ -1,4 +1,3 @@
-
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -158,7 +157,8 @@ export const UploadWidget = ({ onComplete, onCancel }: UploadWidgetProps) => {
         toast({
           title: "CSV format warning",
           description: "File may not contain properly formatted transaction data. Processing will be attempted anyway.",
-          variant: "warning",
+          // Changed from "warning" to "default" since "warning" is not a supported variant
+          variant: "default",
         });
         // We return true anyway and let the backend try to process it
       }
