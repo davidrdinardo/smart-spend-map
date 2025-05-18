@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -31,8 +30,10 @@ function categorizeTransaction(description: string, amount: number): string {
   
   // Check expense categories
   for (const [category, keywords] of Object.entries(categories)) {
-    if (category === 'income') continue;
+    if (category === 'income') continue; // Skip the income category for expense transactions
+    
     if (keywords.some(keyword => description.includes(keyword))) {
+      // Convert first letter to uppercase for category name
       return category.charAt(0).toUpperCase() + category.slice(1);
     }
   }
@@ -452,10 +453,17 @@ serve(async (req) => {
           
           console.log("Processing PDF transaction:", { date, description, amount });
           
+          // Determine transaction type based on amount
           const type = amount >= 0 ? 'income' : 'expense';
           
-          // FIX: Properly apply categorization for expenses
-          const category = type === 'income' ? 'Income' : categorizeTransaction(description, amount);
+          // Apply proper categorization based on type and description
+          let category;
+          if (type === 'income') {
+            category = 'Income';
+          } else {
+            // For expenses, pass a negative value to ensure proper categorization
+            category = categorizeTransaction(description, -1);
+          }
           
           const monthKey = date.substring(0, 7);
           
@@ -650,8 +658,16 @@ serve(async (req) => {
         
         console.log(`Line ${i+1}: Transaction type: ${type}`);
         
-        // FIX: Properly categorize transactions based on type and description
-        const category = type === 'income' ? 'Income' : categorizeTransaction(description, -1); // Pass -1 to ensure it's treated as an expense for categorization
+        // Fixed categorization logic here
+        let category;
+        if (type === 'income') {
+          category = 'Income';
+        } else {
+          // For expenses, ensure we're passing a negative value to categorize correctly
+          category = categorizeTransaction(description, -1);
+        }
+        
+        console.log(`Line ${i+1}: Determined category: ${category} for description: ${description}`);
         
         const monthKey = date.substring(0, 7);
         
