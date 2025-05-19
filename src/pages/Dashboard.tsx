@@ -20,7 +20,7 @@ const Dashboard = () => {
   const { user, loading, signOut } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(isDeleting);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // Data states
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));

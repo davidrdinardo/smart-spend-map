@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { DropZone } from '@/components/upload/DropZone';
 import { FileList } from '@/components/upload/FileList';
@@ -57,14 +56,16 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
     try {
       setUploadStatus('Processing your file...');
       
-      const functionUrl = `${supabase.functions.getUrl('process-statement')}`;
+      // Fix: Use string concatenation instead of getUrl method
+      const functionUrl = `${supabase.auth.getSession().then(res => res.data.session?.access_token || '')}`;
+      const url = `${window.location.origin.replace('8000', '54321')}/functions/v1/process-statement`;
       
       // Call the Supabase Edge Function to process the statements
-      const response = await fetch(functionUrl, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabase.auth.getSession().then(res => res.data.session?.access_token || '')}`
+          'Authorization': `Bearer ${await supabase.auth.getSession().then(res => res.data.session?.access_token || '')}`
         },
         body: JSON.stringify({
           fileId: uploadId,
