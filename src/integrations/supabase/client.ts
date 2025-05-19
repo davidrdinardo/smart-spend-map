@@ -99,15 +99,17 @@ export const clearSupabaseSession = async () => {
   }
 };
 
+// Define RPC function type for bucket policy operations
+interface BucketPolicyParams {
+  bucket_name: string;
+}
+
 // Add this function to help with storage bucket policies
-// We need to cast the RPC calls to specify the parameter types
 export const setPublicBucketPolicy = async (bucketName: string): Promise<boolean> => {
   try {
-    // Define a generic RPC function type for proper TypeScript handling
-    type RpcFunction = <T>(params: Record<string, any>) => T;
-    
     // First try to create an RPC function if it doesn't exist
     try {
+      // Cast the rpc method to accept our params
       await (supabase.rpc as any)('create_bucket_public_policy', { 
         bucket_name: bucketName 
       });
