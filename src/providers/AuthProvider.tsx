@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase, checkAuthState, refreshSessionIfNeeded } from '@/integrations/supabase/client';
@@ -149,7 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const refreshSession = async () => {
+  const refreshSession = async (): Promise<void> => {
     try {
       console.log("Manually refreshing session...");
       const { data, error } = await supabase.auth.refreshSession();
@@ -161,7 +160,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           description: error.message,
           variant: "destructive",
         });
-        return { data, error };
       } else {
         console.log("Session refreshed:", data.session?.user?.id);
         setSession(data.session);
@@ -173,7 +171,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             description: "Your session has been refreshed",
           });
         }
-        return { data, error: null };
       }
     } catch (error: any) {
       console.error("Error during manual session refresh:", error);
@@ -182,7 +179,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: error?.message || "An unexpected error occurred",
         variant: "destructive",
       });
-      return { data: null, error };
     }
   };
   
