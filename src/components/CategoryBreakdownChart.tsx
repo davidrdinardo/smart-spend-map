@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PieChartDisplay } from '@/components/PieChartDisplay';
@@ -46,33 +47,43 @@ export const CategoryBreakdownChart = ({ categoryData }: CategoryBreakdownProps)
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const { toast } = useToast();
   
-  // Normalize category names to avoid duplicates like "Dining Out" and "DiningOut"
+  // Process and deduplicate categories with case-insensitive grouping
   const normalizedCategoryData = categoryData.reduce((acc, category) => {
-    const standardName = standardizeCategory(category.category);
+    // Normalize category name for case-insensitive comparison
+    const standardName = standardizeCategory(category.category).toLowerCase();
     
     // Check if this standardized category name already exists in our accumulator
-    const existingCategoryIndex = acc.findIndex(c => standardizeCategory(c.category) === standardName);
+    const existingCategoryIndex = acc.findIndex(c => 
+      standardizeCategory(c.category).toLowerCase() === standardName
+    );
     
     if (existingCategoryIndex >= 0) {
       // If it exists, add the amount to the existing category
       acc[existingCategoryIndex].amount += category.amount;
-      acc[existingCategoryIndex].percentage += category.percentage;
+      // Don't add percentages directly, we'll recalculate later
     } else {
       // Otherwise add it as a new category with the standardized name
       acc.push({
         ...category,
-        category: standardName
+        category: standardizeCategory(category.category)
       });
     }
     
     return acc;
   }, [] as CategorySummary[]);
   
+  // Recalculate percentages based on the total amount
+  const totalAmount = normalizedCategoryData.reduce((sum, cat) => sum + cat.amount, 0);
+  const finalCategoryData = normalizedCategoryData.map(cat => ({
+    ...cat,
+    percentage: totalAmount > 0 ? (cat.amount / totalAmount) * 100 : 0
+  }));
+  
   // Sort categories by amount spent (highest first)
-  const sortedCategories = [...normalizedCategoryData].sort((a, b) => b.amount - a.amount);
+  const sortedCategories = [...finalCategoryData].sort((a, b) => b.amount - a.amount);
   
   // Calculate total expenses
-  const totalExpenses = normalizedCategoryData.reduce((sum, category) => sum + category.amount, 0);
+  const totalExpenses = finalCategoryData.reduce((sum, category) => sum + category.amount, 0);
 
   // Toggle expanded category
   const toggleCategory = (category: string) => {

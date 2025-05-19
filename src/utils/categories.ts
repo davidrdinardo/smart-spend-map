@@ -1,4 +1,3 @@
-
 // Categories for transaction classification
 export const categories = {
   housing: ["rent", "mortgage", "property tax", "home insurance", "home repair", "maintenance", "hoa", "apartment", "lease", "real estate", "furniture", "decor", "hardware store", "home depot", "lowe's", "ikea"],
