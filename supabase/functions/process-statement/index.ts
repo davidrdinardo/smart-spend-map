@@ -18,11 +18,35 @@ serve(async (req) => {
   }
   
   try {
+    console.log("Process-statement function called");
+    
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("Missing Supabase environment variables");
+      return new Response(
+        JSON.stringify({ error: "Server configuration error" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    const { fileId, userId, statementMonth } = await req.json();
+    // Parse the request body and log it for debugging
+    let requestBody;
+    try {
+      requestBody = await req.json();
+      console.log("Request body:", JSON.stringify(requestBody));
+    } catch (parseError) {
+      console.error("Error parsing request JSON:", parseError);
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON in request body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    const { fileId, userId, statementMonth } = requestBody;
     console.log("Processing file", { fileId, userId, statementMonth });
     
     if (!fileId || !userId) {
