@@ -1,3 +1,4 @@
+
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -80,6 +81,22 @@ export const validateCSVFormat = async (file: File): Promise<boolean> => {
 
 export const ensureStorageBucketExists = async (): Promise<boolean> => {
   try {
+    // Check if user is authenticated
+    const { data: authData } = await supabase.auth.getSession();
+    const isAuthenticated = !!authData.session?.user;
+    
+    if (!isAuthenticated) {
+      console.error("User is not authenticated");
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to upload files.",
+        variant: "destructive",
+      });
+      return false;
+    }
+    
+    console.log("Checking if statements bucket exists...");
+    
     // Check if bucket exists
     const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
     
@@ -108,13 +125,13 @@ export const ensureStorageBucketExists = async (): Promise<boolean> => {
         if (createError.message.includes("row-level security")) {
           toast({
             title: "Storage Permission Error",
-            description: "You don't have permission to create storage buckets. Please check your Supabase RLS policies.",
+            description: "You don't have permission to create storage buckets. This is likely an RLS policy issue.",
             variant: "destructive",
           });
         } else {
           toast({
             title: "Storage Error",
-            description: createError.message || "Could not create storage bucket. Please contact support.",
+            description: createError.message || "Could not create storage bucket. Please check permissions.",
             variant: "destructive",
           });
         }
@@ -123,18 +140,31 @@ export const ensureStorageBucketExists = async (): Promise<boolean> => {
       
       console.log("Created statements bucket successfully:", newBucket);
       
-      // Set up RLS policies for the bucket (this may require admin access)
+      // Set up RLS policies for the bucket
       try {
+        console.log("Setting public policies for the bucket...");
         // Make our bucket publicly readable but only authenticated users can write
         await (supabase.rpc as any)('set_bucket_public_policy', {
           bucket_name: 'statements'
         }).then(({ error: policyError }: { error: any }) => {
           if (policyError) {
             console.error("Error setting bucket policy:", policyError);
+            toast({
+              title: "Storage Policy Error",
+              description: "Created bucket but couldn't set policy. Some features might not work correctly.",
+              variant: "default",
+            });
+          } else {
+            console.log("Successfully set bucket policy for statements");
           }
         });
       } catch (policyErr) {
         console.error("Failed to set bucket policy:", policyErr);
+        toast({
+          title: "Storage Policy Warning",
+          description: "Created bucket but couldn't set policy. Some features might not work correctly.",
+          variant: "default",
+        });
         // Continue anyway, user may need to set policies manually
       }
     } else {

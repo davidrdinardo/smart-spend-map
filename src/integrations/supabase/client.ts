@@ -99,22 +99,49 @@ export const clearSupabaseSession = async () => {
   }
 };
 
-// Define RPC function type for bucket policy operations
-interface BucketPolicyParams {
-  bucket_name: string;
-}
+// Type for RPC bucket policy operations
+type RPCFunction = <T>(functionName: string, params: Record<string, any>) => Promise<{
+  data: T | null;
+  error: Error | null;
+}>;
 
 // Add this function to help with storage bucket policies
 export const setPublicBucketPolicy = async (bucketName: string): Promise<boolean> => {
   try {
+    console.log(`Attempting to set public bucket policy for: ${bucketName}`);
+    
+    // Create the bucket first if it doesn't exist
+    try {
+      const { data: bucketList, error: listError } = await supabase.storage.listBuckets();
+      const bucketExists = bucketList?.some(b => b.name === bucketName);
+      
+      if (!bucketExists) {
+        console.log(`Bucket ${bucketName} doesn't exist, creating it first...`);
+        const { data, error } = await supabase.storage.createBucket(bucketName, {
+          public: true,
+          fileSizeLimit: 52428800 // 50MB
+        });
+        
+        if (error) {
+          console.error("Error creating bucket:", error);
+          return false;
+        }
+        
+        console.log(`Bucket ${bucketName} created successfully`);
+      }
+    } catch (e) {
+      console.error("Error checking/creating bucket:", e);
+    }
+    
     // First try to create an RPC function if it doesn't exist
     try {
-      // Cast the rpc method to accept our params
-      await (supabase.rpc as any)('create_bucket_public_policy', { 
+      const rpcResult = await (supabase.rpc as any)('create_bucket_public_policy', { 
         bucket_name: bucketName 
       });
+      
+      console.log("RPC create_bucket_public_policy result:", rpcResult);
     } catch (e) {
-      console.log('Policy function may already exist:', e);
+      console.log('Policy function may already exist, continuing...', e);
     }
     
     // Then use the RPC function to set policies
@@ -127,6 +154,7 @@ export const setPublicBucketPolicy = async (bucketName: string): Promise<boolean
       return false;
     }
     
+    console.log(`Public bucket policy set successfully for: ${bucketName}`);
     return true;
   } catch (error) {
     console.error("Failed to set bucket policy:", error);
