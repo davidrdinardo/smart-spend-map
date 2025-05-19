@@ -104,7 +104,7 @@ interface BucketPolicyParams {
   bucket_name: string;
 }
 
-// Add this function to help with storage bucket policies
+// Improved bucket policy setter with better error handling
 export const setPublicBucketPolicy = async (bucketName: string): Promise<boolean> => {
   try {
     console.log(`Attempting to set public bucket policy for: ${bucketName}`);
@@ -116,52 +116,104 @@ export const setPublicBucketPolicy = async (bucketName: string): Promise<boolean
       return false;
     }
     
-    // Create the bucket first if it doesn't exist
+    // Try direct bucket creation first (most reliable method)
     try {
       const { data: bucketList, error: listError } = await supabase.storage.listBuckets();
+      
+      if (listError) {
+        console.error("Error listing buckets:", listError);
+        return false;
+      }
+      
       const bucketExists = bucketList?.some(b => b.name === bucketName);
       
       if (!bucketExists) {
-        console.log(`Bucket ${bucketName} doesn't exist, creating it first...`);
+        console.log(`Bucket ${bucketName} doesn't exist, creating it...`);
+        
+        // Try to create bucket with public access
         const { data, error } = await supabase.storage.createBucket(bucketName, {
           public: true,
           fileSizeLimit: 52428800 // 50MB
         });
         
         if (error) {
-          console.error("Error creating bucket:", error);
-          return false;
+          // If bucket already exists despite not showing up in list, that's okay
+          if (error.message.includes('already exists')) {
+            console.log(`Bucket ${bucketName} already exists despite not showing in list`);
+          } else {
+            console.error("Error creating bucket:", error);
+            return false;
+          }
+        } else {
+          console.log(`Bucket ${bucketName} created successfully`);
         }
-        
-        console.log(`Bucket ${bucketName} created successfully`);
+      } else {
+        console.log(`Bucket ${bucketName} already exists`);
       }
+      
+      // Try to update existing bucket to be public
+      const { error: updateError } = await supabase.storage.updateBucket(bucketName, {
+        public: true,
+        fileSizeLimit: 52428800 // 50MB
+      });
+      
+      if (updateError && !updateError.message.includes('already exists')) {
+        console.error(`Error updating bucket ${bucketName}:`, updateError);
+      }
+      
     } catch (e) {
-      console.error("Error checking/creating bucket:", e);
+      console.error("Error in bucket creation/update:", e);
     }
     
-    // Use RPC to set bucket policies (cast to any to bypass TypeScript errors)
+    // Attempt to create RLS policy function if it doesn't exist
     try {
-      const rpcResult = await (supabase.rpc as any)('create_bucket_public_policy', { 
+      // We ignore errors here as the function might already exist
+      await (supabase.rpc as any)('create_bucket_public_policy', { 
+        bucket_name: bucketName 
+      } as BucketPolicyParams).catch(e => {
+        console.log('Policy function may already exist, continuing...', e);
+      });
+    } catch (e) {
+      console.log('Error with create_bucket_public_policy, continuing...', e);
+    }
+    
+    // Then try to use the policy function
+    try {
+      const { error } = await (supabase.rpc as any)('set_bucket_public_policy', { 
         bucket_name: bucketName 
       } as BucketPolicyParams);
       
-      console.log("RPC create_bucket_public_policy result:", rpcResult);
+      if (error) {
+        console.error("Error setting bucket policy:", error);
+        // Continue anyway - RPC functions are a secondary approach
+      } else {
+        console.log(`Public bucket policy set successfully for: ${bucketName}`);
+      }
     } catch (e) {
-      console.log('Policy function may already exist, continuing...', e);
+      console.error("Error calling set_bucket_public_policy:", e);
+      // Continue anyway - if the bucket is already public this is fine
     }
     
-    // Then use the RPC function to set policies
-    const { error } = await (supabase.rpc as any)('set_bucket_public_policy', { 
-      bucket_name: bucketName 
-    } as BucketPolicyParams);
-    
-    if (error) {
-      console.error("Error setting bucket policy:", error);
+    // Final check - try a simple operation to verify permissions
+    try {
+      const userId = authData.session.user.id;
+      const testPath = `${userId}/test-permission.txt`;
+      const { error: testError } = await supabase.storage
+        .from(bucketName)
+        .upload(testPath, new Blob(['test']), { upsert: true });
+        
+      if (testError) {
+        console.error("Permission test failed:", testError);
+        return false;
+      }
+      
+      // Clean up test file
+      await supabase.storage.from(bucketName).remove([testPath]);
+      return true;
+    } catch (testError) {
+      console.error("Permission test exception:", testError);
       return false;
     }
-    
-    console.log(`Public bucket policy set successfully for: ${bucketName}`);
-    return true;
   } catch (error) {
     console.error("Failed to set bucket policy:", error);
     return false;
