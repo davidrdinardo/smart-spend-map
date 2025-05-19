@@ -19,8 +19,13 @@ export const CategoryBreakdownChart = ({ categoryData }: CategoryBreakdownChartP
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const { toast } = useToast();
   
+  // Filter out any "Income" category from expense breakdown
+  const filteredCategoryData = categoryData.filter(category => 
+    category.category.toLowerCase() !== 'income'
+  );
+  
   // Process and deduplicate categories
-  const normalizedCategoryData = categoryData.reduce((acc, category) => {
+  const normalizedCategoryData = filteredCategoryData.reduce((acc, category) => {
     // Normalize category name for consistent format
     const standardName = standardizeCategory(category.category);
     
@@ -32,7 +37,6 @@ export const CategoryBreakdownChart = ({ categoryData }: CategoryBreakdownChartP
     if (existingCategoryIndex >= 0) {
       // If it exists, add the amount to the existing category
       acc[existingCategoryIndex].amount += category.amount;
-      // Don't add percentages directly, we'll recalculate later
     } else {
       // Otherwise add it as a new category with the standardized name
       acc.push({
