@@ -2,7 +2,7 @@
 import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 
-interface DropZoneProps {
+export interface DropZoneProps {
   isDragging: boolean;
   onDragEnter: (e: React.DragEvent) => void;
   onDragLeave: (e: React.DragEvent) => void;

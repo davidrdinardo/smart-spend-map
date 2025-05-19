@@ -1,7 +1,7 @@
 
 import { Button } from '@/components/ui/button';
 
-interface FileListProps {
+export interface FileListProps {
   files: File[];
   onRemove: (index: number) => void;
 }

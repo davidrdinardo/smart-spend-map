@@ -1,10 +1,11 @@
+
 import React, { useState } from 'react';
 import { DropZone } from '@/components/upload/DropZone';
 import { FileList } from '@/components/upload/FileList';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth'; // Updated import path
+import { useAuth } from '@/hooks/useAuth'; 
 import { v4 as uuidv4 } from 'uuid';
 import { format } from 'date-fns';
 
@@ -62,17 +63,16 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
             throw uploadError;
           }
           
-          // Store upload metadata in the database
+          // Store upload metadata in the database - Fixed field name from file_name to filename
           const { error: dbError } = await supabase
             .from('uploads')
             .insert({
               user_id: user.id,
-              file_name: file.name,
+              filename: file.name, // Changed from file_name to filename
               file_path: filePath,
-              file_size: file.size,
-              file_type: file.type,
-              upload_date: new Date().toISOString(),
-              month_key: format(new Date(), 'yyyy-MM')
+              processed: false,
+              uploaded_at: new Date().toISOString(),
+              statement_month: format(new Date(), 'yyyy-MM')
             });
             
           if (dbError) {
@@ -119,8 +119,28 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <DropZone onFileChange={handleFileChange} />
-            <FileList files={files} onFileChange={handleFileChange} />
+            <DropZone
+              isDragging={false}
+              onDragEnter={(e) => e.preventDefault()}
+              onDragLeave={(e) => e.preventDefault()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (e.dataTransfer.files.length > 0) {
+                  handleFileChange(Array.from(e.dataTransfer.files));
+                }
+              }}
+              onFileInputChange={(e) => {
+                if (e.target.files?.length) {
+                  handleFileChange(Array.from(e.target.files));
+                }
+              }}
+            />
+            <FileList files={files} onRemove={(index) => {
+              const newFiles = [...files];
+              newFiles.splice(index, 1);
+              setFiles(newFiles);
+            }} />
           </CardContent>
           <CardFooter className="flex justify-between">
             <button
