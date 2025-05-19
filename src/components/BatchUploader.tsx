@@ -11,7 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { v4 as uuidv4 } from 'uuid';
 import { format, parseISO, isBefore, isAfter } from 'date-fns';
 import { ProcessingStatus } from './upload/ProcessingStatus';
-import { validateCSVFormat } from './upload/utils';
+import { validateCSVFormat, ensureStorageBucketExists } from './upload/utils';
 
 interface BatchUploaderProps {
   onComplete: () => void;
@@ -38,6 +38,16 @@ export const BatchUploader: React.FC<BatchUploaderProps> = ({
   
   const { toast } = useToast();
   const { user } = useAuth();
+  
+  // Initial check to ensure bucket exists
+  useEffect(() => {
+    ensureStorageBucketExists()
+      .then(exists => {
+        if (!exists) {
+          console.error("Storage bucket could not be created or accessed");
+        }
+      });
+  }, []);
   
   const handleFileChange = (newFiles: File[]) => {
     setFiles(prevFiles => {
@@ -116,6 +126,18 @@ export const BatchUploader: React.FC<BatchUploaderProps> = ({
       return;
     }
     
+    // Ensure bucket exists before proceeding
+    const bucketExists = await ensureStorageBucketExists();
+    
+    if (!bucketExists) {
+      toast({
+        title: "Storage Error",
+        description: "Could not access or create storage. Please try again later.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setUploading(true);
     setUploadProgress(0);
     setCurrentFileIndex(0);
@@ -130,6 +152,8 @@ export const BatchUploader: React.FC<BatchUploaderProps> = ({
         const bMonth = detectMonthFromFile(b.name);
         return aMonth.localeCompare(bMonth);
       });
+      
+      console.log(`Attempting to upload ${sortedFiles.length} files to Supabase storage...`);
       
       // Upload each file
       for (let i = 0; i < sortedFiles.length; i++) {
@@ -179,6 +203,8 @@ export const BatchUploader: React.FC<BatchUploaderProps> = ({
           continue;
         }
         
+        console.log(`Successfully uploaded file to storage: ${file.name}`);
+        
         // Store metadata in the database
         const { data: insertData, error: insertError } = await supabase
           .from('uploads')
@@ -202,6 +228,7 @@ export const BatchUploader: React.FC<BatchUploaderProps> = ({
         }
         
         if (insertData && insertData.length > 0) {
+          console.log(`Added upload record to database for ${file.name}, ID: ${insertData[0].id}`);
           setUploadedFiles(prev => [...prev, { id: insertData[0].id, month: detectedMonth }]);
         }
         

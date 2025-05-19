@@ -1,5 +1,6 @@
 
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 export const validateCSVFormat = async (file: File): Promise<boolean> => {
   try {
@@ -78,7 +79,54 @@ export const validateCSVFormat = async (file: File): Promise<boolean> => {
   }
 };
 
-export const processFiles = (
+export const ensureStorageBucketExists = async (): Promise<boolean> => {
+  try {
+    // Check if bucket exists
+    const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
+    
+    if (bucketsError) {
+      console.error("Error checking storage buckets:", bucketsError);
+      throw bucketsError;
+    }
+    
+    const statementsBucketExists = buckets?.some(bucket => bucket.name === 'statements');
+    
+    // If bucket doesn't exist, create it
+    if (!statementsBucketExists) {
+      console.log("Statements bucket not found. Attempting to create it...");
+      const { data: newBucket, error: createError } = await supabase.storage.createBucket(
+        'statements',
+        { public: false }
+      );
+      
+      if (createError) {
+        console.error("Error creating statements bucket:", createError);
+        toast({
+          title: "Storage Error",
+          description: "Could not create storage bucket. Please contact support.",
+          variant: "destructive",
+        });
+        return false;
+      }
+      
+      console.log("Created statements bucket successfully:", newBucket);
+    } else {
+      console.log("Statements bucket already exists");
+    }
+    
+    return true;
+  } catch (error: any) {
+    console.error("Storage bucket check failed:", error);
+    toast({
+      title: "Storage Setup Error",
+      description: error.message || "Could not configure storage",
+      variant: "destructive", 
+    });
+    return false;
+  }
+};
+
+export const processFiles = async (
   files: FileList, 
   setUploadedFiles: React.Dispatch<React.SetStateAction<File[]>>,
 ) => {
@@ -100,6 +148,18 @@ export const processFiles = (
     
     return false;
   });
+  
+  // Ensure storage bucket exists before proceeding
+  const bucketExists = await ensureStorageBucketExists();
+  
+  if (!bucketExists) {
+    toast({
+      title: "Storage Error",
+      description: "Could not access or create storage. Please try again later.",
+      variant: "destructive",
+    });
+    return;
+  }
   
   if (validFiles.length > 0) {
     setUploadedFiles(prev => [...prev, ...validFiles]);
