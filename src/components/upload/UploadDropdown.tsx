@@ -7,12 +7,10 @@ import { useAuth } from '@/hooks/useAuth';
 
 interface UploadDropdownProps {
   onSingleUpload: () => void;
-  onBatchUpload: () => void;
 }
 
 export const UploadDropdown: React.FC<UploadDropdownProps> = ({
   onSingleUpload,
-  onBatchUpload
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -49,23 +47,6 @@ export const UploadDropdown: React.FC<UploadDropdownProps> = ({
     setIsOpen(false);
     onSingleUpload();
   };
-
-  const handleBatchUpload = () => {
-    console.log("Triggering batch upload");
-    
-    // Check if user is logged in
-    if (!user) {
-      toast({
-        title: "Authentication required",
-        description: "You must be logged in to upload statements.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    setIsOpen(false);
-    onBatchUpload();
-  };
   
   return (
     <div className="relative" ref={dropdownRef}>
@@ -84,14 +65,7 @@ export const UploadDropdown: React.FC<UploadDropdownProps> = ({
               className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
               role="menuitem"
             >
-              Upload Single Statement
-            </button>
-            <button
-              onClick={handleBatchUpload}
-              className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              role="menuitem"
-            >
-              Batch Upload (Jan 2025 - Now)
+              Upload Statement
             </button>
           </div>
         </div>

@@ -100,15 +100,21 @@ export const clearSupabaseSession = async () => {
 };
 
 // Type for RPC bucket policy operations
-type RPCFunction = <T>(functionName: string, params: Record<string, any>) => Promise<{
-  data: T | null;
-  error: Error | null;
-}>;
+interface BucketPolicyParams {
+  bucket_name: string;
+}
 
 // Add this function to help with storage bucket policies
 export const setPublicBucketPolicy = async (bucketName: string): Promise<boolean> => {
   try {
     console.log(`Attempting to set public bucket policy for: ${bucketName}`);
+    
+    // First, check if we're authenticated
+    const { data: authData } = await supabase.auth.getSession();
+    if (!authData.session?.user) {
+      console.error("Not authenticated, cannot set bucket policy");
+      return false;
+    }
     
     // Create the bucket first if it doesn't exist
     try {
@@ -133,11 +139,11 @@ export const setPublicBucketPolicy = async (bucketName: string): Promise<boolean
       console.error("Error checking/creating bucket:", e);
     }
     
-    // First try to create an RPC function if it doesn't exist
+    // Use RPC to set bucket policies (cast to any to bypass TypeScript errors)
     try {
       const rpcResult = await (supabase.rpc as any)('create_bucket_public_policy', { 
         bucket_name: bucketName 
-      });
+      } as BucketPolicyParams);
       
       console.log("RPC create_bucket_public_policy result:", rpcResult);
     } catch (e) {
@@ -147,7 +153,7 @@ export const setPublicBucketPolicy = async (bucketName: string): Promise<boolean
     // Then use the RPC function to set policies
     const { error } = await (supabase.rpc as any)('set_bucket_public_policy', { 
       bucket_name: bucketName 
-    });
+    } as BucketPolicyParams);
     
     if (error) {
       console.error("Error setting bucket policy:", error);

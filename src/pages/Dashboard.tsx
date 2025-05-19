@@ -8,7 +8,6 @@ import { TransactionTable } from '@/components/TransactionTable';
 import { BarChartDisplay } from '@/components/BarChartDisplay';
 import { CategoryBreakdownChart } from '@/components/CategoryBreakdownChart';
 import { UploadWidget } from '@/components/UploadWidget';
-import { BatchUploader } from '@/components/BatchUploader';
 import { UploadDropdown } from '@/components/upload/UploadDropdown';
 import { useToast } from '@/hooks/use-toast';
 import { Transaction, MonthSummary, CategorySummary, MonthData } from '@/types';
@@ -21,7 +20,6 @@ const Dashboard = () => {
   const { user, loading, signOut } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
-  const [showBatchUpload, setShowBatchUpload] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
   // Data states
@@ -217,7 +215,6 @@ const Dashboard = () => {
   
   const handleUploadComplete = () => {
     setShowUpload(false);
-    setShowBatchUpload(false);
     toast({
       title: "Upload successful!",
       description: "Your files have been processed successfully.",
@@ -335,14 +332,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {showBatchUpload ? (
-        <BatchUploader 
-          onComplete={handleUploadComplete} 
-          onCancel={() => setShowBatchUpload(false)} 
-          startDate={new Date(2025, 0, 1)} // January 1, 2025
-          endDate={new Date()} // Current date
-        />
-      ) : showUpload ? (
+      {showUpload ? (
         <UploadWidget onComplete={handleUploadComplete} onCancel={() => setShowUpload(false)} />
       ) : (
         <div className="container mx-auto px-4 py-8">
@@ -371,7 +361,6 @@ const Dashboard = () => {
               
               <UploadDropdown
                 onSingleUpload={() => setShowUpload(true)}
-                onBatchUpload={() => setShowBatchUpload(true)}
               />
               
               <Button 
