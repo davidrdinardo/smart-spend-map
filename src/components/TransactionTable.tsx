@@ -33,7 +33,7 @@ import { categories } from '@/utils/categories';
 
 interface TransactionTableProps {
   transactions: Transaction[];
-  onUpdateCategory: (id: string, category: string) => void;
+  onUpdateCategory: (id: string, category: string, type?: string) => void;
 }
 
 export const TransactionTable = ({ transactions, onUpdateCategory }: TransactionTableProps) => {
