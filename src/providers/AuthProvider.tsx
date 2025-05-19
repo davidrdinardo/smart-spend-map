@@ -1,7 +1,7 @@
 
 import { createContext, useEffect, useState, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase, checkAuthState, refreshSessionIfNeeded } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
 
 export type AuthContextType = {
@@ -85,15 +85,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log("Checking for initial session...");
         
         // Check for session and refresh if needed
-        const { data, error } = await refreshSessionIfNeeded();
+        const { data, error } = await supabase.auth.getSession();
         
         if (error) {
-          console.error("Error getting/refreshing session:", error);
+          console.error("Error getting session:", error);
         }
         
         if (data.session) {
           console.log("Initial session found:", data.session.user?.id);
           handleSessionUpdate(data.session);
+          
+          // Attempt to refresh the token if needed
+          if (data.session) {
+            const now = Math.floor(Date.now() / 1000);
+            const expiresAt = data.session.expires_at || 0;
+            const timeToExpire = expiresAt - now;
+            
+            if (timeToExpire < 300) { // Less than 5 minutes until expiration
+              console.log("Session expiring soon, refreshing...");
+              const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+              
+              if (refreshError) {
+                console.error("Error refreshing session:", refreshError);
+              } else if (refreshData.session) {
+                console.log("Session refreshed successfully");
+                handleSessionUpdate(refreshData.session);
+              }
+            }
+          }
         } else {
           console.log("No session found during initial check");
         }

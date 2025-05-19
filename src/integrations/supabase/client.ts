@@ -70,7 +70,7 @@ export const refreshSessionIfNeeded = async () => {
   if (data.session) {
     // We have a session, check if it's expired or about to expire
     const now = Math.floor(Date.now() / 1000);
-    const expiresAt = data.session.expires_at;
+    const expiresAt = data.session.expires_at ?? 0; // Add null check with default value
     const timeToExpire = expiresAt - now;
     
     console.log(`Session expires in ${timeToExpire} seconds`);

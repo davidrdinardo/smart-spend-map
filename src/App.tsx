@@ -12,7 +12,14 @@ import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
 import { useAuth } from "@/hooks/useAuth"; // Import from the correct location
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 // Protected route wrapper component
 const ProtectedRoute = ({ children }: { children: ReactNode }) => {
