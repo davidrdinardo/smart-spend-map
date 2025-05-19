@@ -100,17 +100,18 @@ export const clearSupabaseSession = async () => {
 };
 
 // Add this function to help with storage bucket policies
+// We need to cast the RPC calls to specify the parameter types
 export const setPublicBucketPolicy = async (bucketName: string): Promise<boolean> => {
   try {
     // First try to create an RPC function if it doesn't exist
     try {
-      await supabase.rpc('create_bucket_public_policy', { bucket_name: bucketName });
+      await supabase.rpc('create_bucket_public_policy', { bucket_name: bucketName } as any);
     } catch (e) {
       console.log('Policy function may already exist:', e);
     }
     
     // Then use the RPC function to set policies
-    const { error } = await supabase.rpc('set_bucket_public_policy', { bucket_name: bucketName });
+    const { error } = await supabase.rpc('set_bucket_public_policy', { bucket_name: bucketName } as any);
     
     if (error) {
       console.error("Error setting bucket policy:", error);
@@ -123,3 +124,4 @@ export const setPublicBucketPolicy = async (bucketName: string): Promise<boolean
     return false;
   }
 };
+

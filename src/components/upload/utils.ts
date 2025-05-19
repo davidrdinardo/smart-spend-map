@@ -129,7 +129,7 @@ export const ensureStorageBucketExists = async (): Promise<boolean> => {
         // Make our bucket publicly readable but only authenticated users can write
         await supabase.rpc('set_bucket_public_policy', {
           bucket_name: 'statements'
-        }).then(({ error: policyError }) => {
+        } as any).then(({ error: policyError }) => {
           if (policyError) {
             console.error("Error setting bucket policy:", policyError);
           }
