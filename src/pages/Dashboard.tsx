@@ -34,7 +34,8 @@ const Dashboard = () => {
   const [categoryData, setCategoryData] = useState<CategorySummary[]>([]);
   const [monthlyData, setMonthlyData] = useState<MonthData[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [availableMonths, setAvailableMonths] = useState<{key: string, label: string}[]>([]);
+  // Fixed: Correct syntax for useState with type annotation
+  const [availableMonths, setAvailableMonths] = useState<Array<{key: string, label: string}>>([]);
   
   // Check for authentication
   useEffect(() => {
