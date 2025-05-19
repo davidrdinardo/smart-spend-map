@@ -94,22 +94,50 @@ export const ensureStorageBucketExists = async (): Promise<boolean> => {
     // If bucket doesn't exist, create it
     if (!statementsBucketExists) {
       console.log("Statements bucket not found. Attempting to create it...");
-      const { data: newBucket, error: createError } = await supabase.storage.createBucket(
-        'statements',
-        { public: false }
-      );
+      
+      // Try to create the bucket with public access
+      const { data: newBucket, error: createError } = await supabase.storage
+        .createBucket('statements', { 
+          public: true,  // Make bucket public
+          fileSizeLimit: 52428800 // 50MB limit
+        });
       
       if (createError) {
         console.error("Error creating statements bucket:", createError);
-        toast({
-          title: "Storage Error",
-          description: "Could not create storage bucket. Please contact support.",
-          variant: "destructive",
-        });
+        
+        // Show more detailed error message
+        if (createError.message.includes("row-level security")) {
+          toast({
+            title: "Storage Permission Error",
+            description: "You don't have permission to create storage buckets. Please check your Supabase RLS policies.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Storage Error",
+            description: createError.message || "Could not create storage bucket. Please contact support.",
+            variant: "destructive",
+          });
+        }
         return false;
       }
       
       console.log("Created statements bucket successfully:", newBucket);
+      
+      // Set up RLS policies for the bucket (this may require admin access)
+      try {
+        // Make our bucket publicly readable but only authenticated users can write
+        const { error: policyError } = await supabase.rpc('set_bucket_public_policy', {
+          bucket_name: 'statements'
+        });
+        
+        if (policyError) {
+          console.error("Error setting bucket policy:", policyError);
+        }
+      } catch (policyErr) {
+        console.error("Failed to set bucket policy:", policyErr);
+        // Continue anyway, user may need to set policies manually
+      }
     } else {
       console.log("Statements bucket already exists");
     }
@@ -119,7 +147,7 @@ export const ensureStorageBucketExists = async (): Promise<boolean> => {
     console.error("Storage bucket check failed:", error);
     toast({
       title: "Storage Setup Error",
-      description: error.message || "Could not configure storage",
+      description: "Please ensure you're logged in and have proper permissions. Error: " + (error.message || "Unknown error"),
       variant: "destructive", 
     });
     return false;
@@ -155,7 +183,7 @@ export const processFiles = async (
   if (!bucketExists) {
     toast({
       title: "Storage Error",
-      description: "Could not access or create storage. Please try again later.",
+      description: "Could not access or create storage. Please check that you're logged in and have proper permissions.",
       variant: "destructive",
     });
     return;

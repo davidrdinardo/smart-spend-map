@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { UploadIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth'; 
 
 interface UploadDropdownProps {
   onSingleUpload: () => void;
@@ -16,6 +17,7 @@ export const UploadDropdown: React.FC<UploadDropdownProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -33,12 +35,34 @@ export const UploadDropdown: React.FC<UploadDropdownProps> = ({
 
   const handleSingleUpload = () => {
     console.log("Triggering single upload");
+    
+    // Check if user is logged in
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "You must be logged in to upload statements.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setIsOpen(false);
     onSingleUpload();
   };
 
   const handleBatchUpload = () => {
     console.log("Triggering batch upload");
+    
+    // Check if user is logged in
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "You must be logged in to upload statements.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setIsOpen(false);
     onBatchUpload();
   };
