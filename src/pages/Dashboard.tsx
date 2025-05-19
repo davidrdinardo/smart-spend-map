@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -144,21 +145,23 @@ const Dashboard = () => {
       let totalIncome = 0;
       let totalExpenses = 0;
       
-      // Create a map for expense categories
-      const categoryAmounts: Record<string, number> = {};
+      // Create separate maps for expenses and income
+      const expenseCategoryAmounts: Record<string, number> = {};
       
       typedTransactions.forEach(tx => {
+        const amount = Number(tx.amount);
+        
         if (tx.type === 'income') {
-          totalIncome += Number(tx.amount);
+          totalIncome += amount;
         } else {
-          totalExpenses += Number(tx.amount);
+          totalExpenses += amount;
           
           // Aggregate expenses by category
           const category = tx.category || 'Other';
-          if (!categoryAmounts[category]) {
-            categoryAmounts[category] = 0;
+          if (!expenseCategoryAmounts[category]) {
+            expenseCategoryAmounts[category] = 0;
           }
-          categoryAmounts[category] += Number(tx.amount);
+          expenseCategoryAmounts[category] += amount;
         }
       });
       
@@ -172,14 +175,16 @@ const Dashboard = () => {
       });
       
       // Calculate categories for pie chart
-      const totalExpenseAmount = Object.values(categoryAmounts).reduce((sum, amount) => sum + amount, 0);
+      const totalExpenseAmount = Object.values(expenseCategoryAmounts).reduce((sum, amount) => sum + amount, 0);
       
-      // Map category data for the chart
-      const categoryItems: CategorySummary[] = Object.entries(categoryAmounts).map(([category, amount]) => ({
-        category,
-        amount,
-        percentage: totalExpenseAmount > 0 ? (amount / totalExpenseAmount) * 100 : 0
-      }));
+      // Map expense category data for the chart (excluding any "Income" categories)
+      const categoryItems: CategorySummary[] = Object.entries(expenseCategoryAmounts)
+        .filter(([category]) => category.toLowerCase() !== 'income')
+        .map(([category, amount]) => ({
+          category,
+          amount,
+          percentage: totalExpenseAmount > 0 ? (amount / totalExpenseAmount) * 100 : 0
+        }));
       
       console.log("Category data:", categoryItems);
       setCategoryData(categoryItems);

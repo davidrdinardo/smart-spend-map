@@ -207,12 +207,20 @@ export async function processCSVData(
       }
       existingTransactions.add(transactionKey);
       
-      // Use AI for categorization (with sign for proper context)
-      let category = await categorizeWithAI(description, isExpense ? -amount : amount);
+      // Set default category
+      let category = type === 'income' ? 'Income' : 'Other';
       
-      // Make sure income transactions are categorized as "Income"
-      if (type === 'income') {
-        category = 'Income';
+      // Only use AI for categorizing expenses
+      if (type === 'expense') {
+        try {
+          const aiCategory = await categorizeWithAI(description, -amount);
+          if (aiCategory && aiCategory.trim() !== '') {
+            category = aiCategory;
+          }
+        } catch (error) {
+          console.error(`Error using AI to categorize: ${error.message}`);
+          // Default category will be used
+        }
       }
       
       console.log(`Line ${i+1}: Adding transaction: ${date} | ${description} | ${amount} | ${type} | ${category}`);
