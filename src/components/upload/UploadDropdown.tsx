@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { UploadIcon } from 'lucide-react';
 
 interface UploadDropdownProps {
   onSingleUpload: () => void;
@@ -34,6 +35,7 @@ export const UploadDropdown: React.FC<UploadDropdownProps> = ({
         onClick={() => setIsOpen(!isOpen)}
         className="bg-income hover:bg-income-dark"
       >
+        <UploadIcon className="mr-2 h-4 w-4" />
         Upload Statements
       </Button>
       {isOpen && (

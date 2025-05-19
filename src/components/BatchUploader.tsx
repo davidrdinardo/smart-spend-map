@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { v4 as uuidv4 } from 'uuid';
 import { format, parseISO, isBefore, isAfter } from 'date-fns';
 import { ProcessingStatus } from './upload/ProcessingStatus';
+import { validateCSVFormat } from './upload/utils';
 
 interface BatchUploaderProps {
   onComplete: () => void;
@@ -149,12 +150,21 @@ export const BatchUploader: React.FC<BatchUploaderProps> = ({
           continue;
         }
         
+        // Validate CSV files before uploading
+        if (file.name.toLowerCase().endsWith('.csv') || file.name.toLowerCase().endsWith('.tsv')) {
+          const isValid = await validateCSVFormat(file);
+          if (!isValid) {
+            console.log(`Skipping invalid CSV file: ${file.name}`);
+            continue;
+          }
+        }
+        
         const fileExt = file.name.split('.').pop();
         const filePath = `${user.id}/${detectedMonth}/${uuidv4()}.${fileExt}`;
         
         console.log(`Uploading ${file.name} for month ${detectedMonth} to path ${filePath}`);
         
-        // Upload the file
+        // Upload the file to Supabase Storage
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('statements')
           .upload(filePath, file);
@@ -199,6 +209,16 @@ export const BatchUploader: React.FC<BatchUploaderProps> = ({
         setUploadProgress(((i + 1) / sortedFiles.length) * 100);
       }
       
+      if (uploadedFiles.length === 0) {
+        toast({
+          title: "No files uploaded",
+          description: "No files were uploaded. Please check that your files meet the requirements.",
+          variant: "destructive",
+        });
+        setUploading(false);
+        return;
+      }
+      
       toast({
         title: "Upload complete!",
         description: `Successfully uploaded ${uploadedFiles.length} files.`,
@@ -216,7 +236,9 @@ export const BatchUploader: React.FC<BatchUploaderProps> = ({
         variant: "destructive",
       });
     } finally {
-      setUploading(false);
+      if (!processing) {
+        setUploading(false);
+      }
     }
   };
   
@@ -242,7 +264,7 @@ export const BatchUploader: React.FC<BatchUploaderProps> = ({
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabase.auth.getSession().then(res => res.data.session?.access_token)}`
+              'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
             },
             body: JSON.stringify({
               fileId: fileInfo.id,
@@ -256,7 +278,13 @@ export const BatchUploader: React.FC<BatchUploaderProps> = ({
           const errorText = await response.text();
           console.error(`Error processing file ${fileInfo.id}:`, errorText);
           setProcessingError(`Error processing file ${i+1}: ${errorText}`);
+          
+          // Continue with next file despite error
+          continue;
         }
+        
+        // Update progress
+        setUploadProgress(((i + 1) / uploadedFiles.length) * 100);
       }
       
       setProcessingResult(`Successfully processed ${uploadedFiles.length} files`);
@@ -273,6 +301,7 @@ export const BatchUploader: React.FC<BatchUploaderProps> = ({
       });
     } finally {
       setProcessing(false);
+      setUploading(false);
     }
   };
 
@@ -302,7 +331,7 @@ export const BatchUploader: React.FC<BatchUploaderProps> = ({
   
   if (uploading || processing) {
     return (
-      <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+      <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
         <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
           <ProcessingStatus 
             status={status}
@@ -317,7 +346,7 @@ export const BatchUploader: React.FC<BatchUploaderProps> = ({
   }
   
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
       <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
         <Card>
           <CardHeader>

@@ -12,6 +12,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -65,15 +66,16 @@ serve(async (req) => {
     
     console.log("Using month key:", monthKey);
     
+    // Fixed bucket name - make sure you're using 'statements' consistently
     const { data: fileData, error: fileError } = await supabase
       .storage
-      .from('bank_statements')
+      .from('statements')
       .download(uploadData.file_path);
       
     if (fileError || !fileData) {
       console.error("Error downloading file", fileError);
       return new Response(
-        JSON.stringify({ error: "Error downloading file" }),
+        JSON.stringify({ error: "Error downloading file: " + fileError?.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -199,6 +201,7 @@ serve(async (req) => {
       console.log("No transactions to insert");
     }
     
+    // Mark upload as processed even if there were no transactions
     await supabase
       .from('uploads')
       .update({ processed: true })
