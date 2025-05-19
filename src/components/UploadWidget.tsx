@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { format } from 'date-fns';
 import { processFiles, ensureStorageBucketExists } from './upload/utils';
 import { ProcessingStatus } from './upload/ProcessingStatus';
+import { MonthSelector } from './upload/MonthSelector';
 
 interface UploadWidgetProps {
   onComplete: () => void;
@@ -25,6 +26,9 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
   const [processingError, setProcessingError] = useState<string | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
+  
+  // Added selected month state with default to current month
+  const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
   
   const handleFileChange = (newFiles: File[]) => {
     setFiles(newFiles);
@@ -75,7 +79,8 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
         },
         body: JSON.stringify({
           fileId: uploadId,
-          userId: user.id
+          userId: user.id,
+          statementMonth: selectedMonth // Pass selected month
         })
       });
       
@@ -153,9 +158,10 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
         setUploadProgress(Math.min(100, progressPerFile * i));
         
         const fileExt = file.name.split('.').pop();
-        const filePath = `${user.id}/${format(new Date(), 'yyyy-MM')}/${uuidv4()}.${fileExt}`;
+        // Use selected month for file path organization
+        const filePath = `${user.id}/${selectedMonth}/${uuidv4()}.${fileExt}`;
         
-        console.log("Uploading file:", file.name, "to path:", filePath);
+        console.log("Uploading file:", file.name, "to path:", filePath, "for month:", selectedMonth);
         
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('statements')
@@ -180,7 +186,7 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
             file_path: filePath,
             processed: false,
             uploaded_at: new Date().toISOString(),
-            statement_month: format(new Date(), 'yyyy-MM')
+            statement_month: selectedMonth // Use selected month
           })
           .select('id');
           
@@ -235,14 +241,21 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
       >
         <Card>
           <CardHeader>
-            <CardTitle>Upload Bank Statements</CardTitle>
+            <CardTitle>Upload Bank Statement</CardTitle>
             <CardDescription>
-              Upload your bank statements to automatically extract transactions.
+              Upload your bank statement to automatically extract transactions.
             </CardDescription>
           </CardHeader>
           <CardContent>
             {!uploading ? (
               <>
+                {/* Added MonthSelector with full 2025 year option */}
+                <MonthSelector 
+                  selectedMonth={selectedMonth} 
+                  setSelectedMonth={setSelectedMonth}
+                  year={2025}
+                  showFullYear={true}
+                />
                 <DropZone
                   isDragging={false}
                   onDragEnter={(e) => e.preventDefault()}
