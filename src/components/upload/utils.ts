@@ -1,4 +1,3 @@
-
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -81,7 +80,7 @@ export const validateCSVFormat = async (file: File): Promise<boolean> => {
 
 export const ensureStorageBucketExists = async (): Promise<boolean> => {
   try {
-    console.log("Checking and ensuring storage bucket exists...");
+    console.log("Checking storage bucket access...");
     
     // Check authentication first
     const { data: authData } = await supabase.auth.getSession();
@@ -100,103 +99,41 @@ export const ensureStorageBucketExists = async (): Promise<boolean> => {
     const userId = authData.session?.user?.id;
     console.log("User authenticated:", userId);
     
-    // Use a try/catch for each Supabase operation to provide better error handling
+    // Check if we can access the bucket
     try {
-      // Create the statements bucket if it doesn't exist
-      const bucketName = 'statements';
+      const { data: bucketData, error: bucketError } = await supabase
+        .storage
+        .getBucket('statements');
       
-      // First check if bucket exists
-      const { data: buckets, error: listError } = await supabase.storage.listBuckets();
-      
-      if (listError) {
-        console.error("Error checking storage buckets:", listError);
+      if (bucketError) {
+        console.error("Error accessing bucket:", bucketError);
         
-        if (listError.message.includes("timeout")) {
+        if (bucketError.message.includes("does not exist")) {
           toast({
-            title: "Network Error",
-            description: "Connection to storage timed out. Please check your network connection.",
+            title: "Storage Setup Error",
+            description: "The storage bucket doesn't exist. Please contact your administrator.",
             variant: "destructive",
           });
           return false;
         }
         
-        if (listError.message.includes("permission") || listError.message.includes("not authorized")) {
+        if (bucketError.message.includes("permission") || bucketError.message.includes("not authorized")) {
           toast({
             title: "Permission Error",
-            description: "You don't have permission to access storage. Please check your account permissions.",
-            variant: "destructive",
-          });
-          return false;
-        }
-        
-        throw listError;
-      }
-      
-      // Check if the bucket exists
-      const statementsBucketExists = buckets?.some(bucket => bucket.name === bucketName);
-      
-      if (!statementsBucketExists) {
-        console.log("Statements bucket not found. Creating it...");
-        
-        // Try to create the bucket with public access
-        const { error: createError } = await supabase.storage.createBucket(bucketName, { 
-          public: true,
-          fileSizeLimit: 52428800, // 50MB limit
-        });
-        
-        if (createError) {
-          console.error("Error creating statements bucket:", createError);
-          
-          // Show more user-friendly error messages
-          if (createError.message.includes("already exists")) {
-            console.log("Bucket already exists despite not being in the list, continuing...");
-            // Continue as if bucket exists
-          } else if (createError.message.includes("permission") || createError.message.includes("not authorized")) {
-            toast({
-              title: "Storage Permission Error",
-              description: "You don't have permission to create storage buckets. Please contact your administrator.",
-              variant: "destructive",
-            });
-            return false;
-          } else {
-            toast({
-              title: "Storage Setup Error",
-              description: createError.message || "Could not create storage bucket.",
-              variant: "destructive",
-            });
-            return false;
-          }
-        } else {
-          console.log("Successfully created statements bucket");
-        }
-      } else {
-        console.log("Statements bucket already exists");
-      }
-      
-      // Get buckets again to confirm our bucket exists
-      const { data: confirmedBuckets, error: confirmError } = await supabase.storage.listBuckets();
-      
-      if (confirmError) {
-        console.error("Error confirming bucket existence:", confirmError);
-      } else {
-        const bucketExists = confirmedBuckets?.some(bucket => bucket.name === bucketName);
-        console.log(`Bucket ${bucketName} existence confirmed:`, bucketExists);
-        
-        if (!bucketExists) {
-          toast({
-            title: "Storage Configuration Error",
-            description: "Unable to access or create storage bucket. Please try again later.",
+            description: "You don't have permission to access the storage bucket. Please check your account permissions.",
             variant: "destructive",
           });
           return false;
         }
       }
+      
+      console.log("Storage bucket exists:", bucketData?.name);
       
       // Try a simple operation to verify we can use the bucket
       try {
         const testPath = `${userId}/test-permission.txt`;
         const { error: uploadError } = await supabase.storage
-          .from(bucketName)
+          .from('statements')
           .upload(testPath, new Blob(['test']), { upsert: true });
           
         if (uploadError) {
@@ -210,30 +147,42 @@ export const ensureStorageBucketExists = async (): Promise<boolean> => {
             });
             return false;
           }
-        } else {
-          // Clean up test file
-          await supabase.storage.from(bucketName).remove([testPath]);
-          console.log("Storage write permission confirmed");
+          
+          toast({
+            title: "Upload Error",
+            description: uploadError.message || "Could not verify upload permissions.",
+            variant: "destructive",
+          });
+          return false;
         }
+        
+        // Clean up test file
+        await supabase.storage.from('statements').remove([testPath]);
+        console.log("Storage write permission confirmed");
+        return true;
       } catch (testError) {
         console.error("Error during permission test:", testError);
+        toast({
+          title: "Permission Test Failed",
+          description: "Could not verify storage permissions. Please try again later.",
+          variant: "destructive",
+        });
+        return false;
       }
-      
-      return true;
     } catch (storageError: any) {
-      console.error("Storage setup error:", storageError);
+      console.error("Storage access error:", storageError);
       toast({
-        title: "Storage Setup Error",
-        description: storageError.message || "An unexpected error occurred while setting up storage.",
+        title: "Storage Access Error",
+        description: storageError.message || "An unexpected error occurred while accessing storage.",
         variant: "destructive", 
       });
       return false;
     }
   } catch (error: any) {
-    console.error("Critical storage bucket check failed:", error);
+    console.error("Critical storage check failed:", error);
     toast({
       title: "Storage Error",
-      description: "Could not access or create storage. Please check that you're logged in and have proper permissions.",
+      description: "Could not access storage. Please check that you're logged in and have proper permissions.",
       variant: "destructive", 
     });
     return false;
@@ -269,7 +218,7 @@ export const processFiles = async (
   if (!bucketExists) {
     toast({
       title: "Storage Error",
-      description: "Could not access or create storage. Please check that you're logged in and have proper permissions.",
+      description: "Could not access storage. Please make sure you're logged in and try again.",
       variant: "destructive",
     });
     return;

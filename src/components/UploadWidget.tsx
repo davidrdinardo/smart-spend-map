@@ -28,13 +28,24 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
   
   // Initial check to make sure bucket exists
   useEffect(() => {
-    ensureStorageBucketExists()
-      .then(exists => {
-        if (!exists) {
-          console.error("Storage bucket could not be created or accessed");
-        }
-      });
-  }, []);
+    async function checkBucket() {
+      const exists = await ensureStorageBucketExists();
+      if (!exists) {
+        console.error("Storage bucket could not be accessed");
+        toast({
+          title: "Storage Setup",
+          description: "Storage access issues detected. Please make sure you're signed in.",
+          variant: "default",
+        });
+      } else {
+        console.log("Storage bucket access confirmed");
+      }
+    }
+    
+    if (user) {
+      checkBucket();
+    }
+  }, [user, toast]);
   
   const handleUpload = async () => {
     if (!user) {
@@ -62,7 +73,7 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
       const bucketExists = await ensureStorageBucketExists();
       
       if (!bucketExists) {
-        throw new Error("Storage bucket could not be created or accessed");
+        throw new Error("Storage bucket could not be accessed. Please check your permissions and try again.");
       }
       
       // Upload each file
@@ -81,6 +92,11 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
           
         if (uploadError) {
           console.error("File upload error:", file.name, uploadError);
+          
+          if (uploadError.message.includes("permission") || uploadError.message.includes("unauthorized")) {
+            throw new Error(`Permission denied: You don't have rights to upload to this storage bucket.`);
+          }
+          
           throw uploadError;
         }
         
@@ -98,6 +114,10 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
           
         if (dbError) {
           console.error("Database insert error:", file.name, dbError);
+          
+          // Try to delete the uploaded file if database insert fails
+          await supabase.storage.from('statements').remove([filePath]);
+          
           throw dbError;
         }
       }
@@ -118,7 +138,7 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
       console.error("Upload error:", error);
       toast({
         title: "Upload failed",
-        description: error.message || "An unexpected error occurred",
+        description: error.message || "An unexpected error occurred during upload",
         variant: "destructive",
       });
     } finally {
