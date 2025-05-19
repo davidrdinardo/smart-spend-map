@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -7,7 +6,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { format } from 'date-fns';
 import { TransactionTable } from '@/components/TransactionTable';
 import { BarChartDisplay } from '@/components/BarChartDisplay';
-import { CategoryBreakdownChart } from '@/components/CategoryBreakdownChart';
 import { UploadWidget } from '@/components/UploadWidget';
 import { UploadDropdown } from '@/components/upload/UploadDropdown';
 import { NetBalanceIndicator } from '@/components/dashboard/NetBalanceIndicator';
@@ -34,7 +32,6 @@ const Dashboard = () => {
   const [categoryData, setCategoryData] = useState<CategorySummary[]>([]);
   const [monthlyData, setMonthlyData] = useState<MonthData[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  // Fixed: Correct syntax for useState with type annotation
   const [availableMonths, setAvailableMonths] = useState<Array<{key: string, label: string}>>([]);
   
   // Check for authentication
@@ -469,12 +466,7 @@ const Dashboard = () => {
             />
           </div>
           
-          {/* Expense Breakdown Section */}
-          <div className="mb-8">
-            <CategoryBreakdownChart 
-              categoryData={categoryData}
-            />
-          </div>
+          {/* Removed CategoryBreakdownChart Section */}
           
           {/* Charts Section */}
           <div className="mb-8">
