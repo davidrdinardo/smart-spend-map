@@ -1,60 +1,32 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PieChartDisplay } from '@/components/PieChartDisplay';
-import { CategorySummary } from '@/types';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from '@/components/ui/select';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableRow,
-  TableHeader,
-  TableHead,
-} from "@/components/ui/table";
-import { ChevronDown, ChevronRight } from "lucide-react";
-import { Button } from '@/components/ui/button';
-import { formatCurrency, formatDate } from '@/utils/formatters';
-import { supabase } from '@/integrations/supabase/client';
+import { standardizeCategory } from '@/utils/categories';
 import { useToast } from '@/hooks/use-toast';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
-interface CategoryBreakdownProps {
+export interface CategorySummary {
+  category: string;
+  amount: number;
+  percentage: number;
+}
+
+interface CategoryBreakdownChartProps {
   categoryData: CategorySummary[];
 }
 
-// Helper function to standardize category names
-const standardizeCategory = (category: string): string => {
-  // This ensures consistent category display regardless of how it's stored in the database
-  return category
-    .replace(/([A-Z])/g, ' $1') // Add space before capital letters
-    .replace(/^./, str => str.toUpperCase()) // Capitalize first letter
-    .trim(); // Remove any leading/trailing spaces
-};
-
-export const CategoryBreakdownChart = ({ categoryData }: CategoryBreakdownProps) => {
-  const [view, setView] = useState<'percentage' | 'amount'>('percentage');
+export const CategoryBreakdownChart = ({ categoryData }: CategoryBreakdownChartProps) => {
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const { toast } = useToast();
   
-  // Process and deduplicate categories with case-insensitive grouping
+  // Process and deduplicate categories
   const normalizedCategoryData = categoryData.reduce((acc, category) => {
-    // Normalize category name for case-insensitive comparison
-    const standardName = standardizeCategory(category.category).toLowerCase();
+    // Normalize category name for consistent format
+    const standardName = standardizeCategory(category.category);
     
-    // Check if this standardized category name already exists in our accumulator
+    // Check if this standardized category name already exists in our accumulator (case-insensitive)
     const existingCategoryIndex = acc.findIndex(c => 
-      standardizeCategory(c.category).toLowerCase() === standardName
+      standardizeCategory(c.category).toLowerCase() === standardName.toLowerCase()
     );
     
     if (existingCategoryIndex >= 0) {
@@ -65,7 +37,7 @@ export const CategoryBreakdownChart = ({ categoryData }: CategoryBreakdownProps)
       // Otherwise add it as a new category with the standardized name
       acc.push({
         ...category,
-        category: standardizeCategory(category.category)
+        category: standardName
       });
     }
     
@@ -87,197 +59,116 @@ export const CategoryBreakdownChart = ({ categoryData }: CategoryBreakdownProps)
 
   // Toggle expanded category
   const toggleCategory = (category: string) => {
-    setExpandedCategory(expandedCategory === category ? null : category);
+    if (expandedCategory === category) {
+      setExpandedCategory(null);
+    } else {
+      setExpandedCategory(category);
+    }
   };
-  
+
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount);
+  };
+
+  // Return fallback UI if no data
+  if (sortedCategories.length === 0) {
+    return (
+      <Card className="col-span-full bg-gray-50/30 h-64 flex items-center justify-center">
+        <CardContent className="text-center text-gray-500">
+          <p>No expense data available</p>
+          <p className="text-sm mt-2">Upload bank statements to see your expense breakdown</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle>Expense Breakdown</CardTitle>
-        <Select value={view} onValueChange={(value: 'percentage' | 'amount') => setView(value)}>
-          <SelectTrigger className="w-[130px]">
-            <SelectValue placeholder="Select view" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="percentage">Percentage</SelectItem>
-            <SelectItem value="amount">Amount ($)</SelectItem>
-          </SelectContent>
-        </Select>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="h-[300px]">
-            <PieChartDisplay data={sortedCategories} />
-          </div>
-          <div className="overflow-auto max-h-[300px]">
-            <table className="w-full">
-              <thead className="sticky top-0 bg-background">
-                <tr className="border-b">
-                  <th className="text-left py-2">Category</th>
-                  <th className="text-right py-2">
-                    {view === 'percentage' ? 'Percentage' : 'Amount'}
-                  </th>
-                  <th className="w-10"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedCategories.map((category, index) => (
-                  <Collapsible 
-                    key={index} 
-                    open={expandedCategory === category.category}
-                    asChild
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Expense Breakdown</CardTitle>
+        </CardHeader>
+        <CardContent className="h-64">
+          <PieChartDisplay data={sortedCategories} />
+        </CardContent>
+      </Card>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>Top Categories</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {sortedCategories.map((category, index) => {
+              const isExpanded = expandedCategory === category.category;
+              
+              return (
+                <div
+                  key={index}
+                  className={`border rounded-md ${
+                    isExpanded ? 'border-blue-300 bg-blue-50' : 'border-gray-200'
+                  }`}
+                >
+                  <div
+                    onClick={() => toggleCategory(category.category)}
+                    className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50"
                   >
-                    <>
-                      <tr className="border-b border-border/40">
-                        <td className="py-2 text-left">{category.category}</td>
-                        <td className="py-2 text-right font-medium">
-                          {view === 'percentage' 
-                            ? `${(category.amount / totalExpenses * 100).toFixed(1)}%`
-                            : formatCurrency(category.amount)
-                          }
-                        </td>
-                        <td className="w-10 py-2 text-right">
-                          <CollapsibleTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => toggleCategory(category.category)}
-                              className="h-6 w-6 p-0"
-                            >
-                              {expandedCategory === category.category ? (
-                                <ChevronDown className="h-4 w-4" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4" />
-                              )}
-                              <span className="sr-only">Toggle {category.category} details</span>
-                            </Button>
-                          </CollapsibleTrigger>
-                        </td>
-                      </tr>
-                      <CollapsibleContent asChild>
-                        <tr>
-                          <td colSpan={3} className="bg-muted/30">
-                            <div className="p-2">
-                              <CategoryDetail 
-                                category={category.category} 
-                                totalAmount={category.amount}
-                              />
-                            </div>
-                          </td>
-                        </tr>
-                      </CollapsibleContent>
-                    </>
-                  </Collapsible>
-                ))}
-              </tbody>
-              <tfoot className="sticky bottom-0 bg-background">
-                <tr className="border-t border-t-2">
-                  <td className="py-2 font-bold">Total</td>
-                  <td className="py-2 text-right font-bold">
-                    {view === 'percentage' 
-                      ? '100%'
-                      : formatCurrency(totalExpenses)
-                    }
-                  </td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
+                    <div className="flex items-center space-x-2">
+                      {isExpanded ? (
+                        <ChevronUp className="h-4 w-4 text-gray-500" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-gray-500" />
+                      )}
+                      <span className="font-medium">{category.category}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-semibold">
+                        {formatCurrency(category.amount)}
+                      </span>
+                      <span className="text-xs text-gray-500 w-14 text-right">
+                        {category.percentage.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {isExpanded && (
+                    <div className="p-3 pt-0 border-t border-gray-200 bg-gray-50">
+                      <div className="text-sm text-gray-600 space-y-2">
+                        <p>
+                          <span className="font-medium">Amount:</span> {formatCurrency(category.amount)}
+                        </p>
+                        <p>
+                          <span className="font-medium">Percentage:</span>{' '}
+                          {category.percentage.toFixed(1)}% of total expenses
+                        </p>
+                        <div className="w-full bg-gray-200 rounded-full h-2.5">
+                          <div
+                            className="bg-expense h-2.5 rounded-full"
+                            style={{ width: `${Math.min(100, category.percentage)}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
-
-interface CategoryDetailProps {
-  category: string;
-  totalAmount: number;
-}
-
-// Component to show detailed breakdown of a category
-const CategoryDetail = ({ category, totalAmount }: CategoryDetailProps) => {
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const { toast } = useToast();
-
-  useEffect(() => {
-    const fetchCategoryTransactions = async () => {
-      setIsLoading(true);
-      try {
-        const { data: user } = await supabase.auth.getUser();
-        if (!user.user) return;
-
-        // Get the current month key in yyyy-MM format
-        const currentMonth = new Date();
-        const monthKey = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
-
-        // Fetch all transactions for this category in the current month
-        const { data, error } = await supabase
-          .from('transactions')
-          .select('id, date, description, amount')
-          .eq('category', category)
-          .eq('user_id', user.user.id)
-          .eq('month_key', monthKey)
-          .order('date', { ascending: false });
-
-        if (error) throw error;
-        setTransactions(data || []);
-      } catch (error: any) {
-        console.error('Error fetching category transactions:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to load transaction details',
-          variant: 'destructive',
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchCategoryTransactions();
-  }, [category, toast]);
-
-  return (
-    <div className="space-y-2">
-      <h4 className="text-sm font-medium">{category} Breakdown</h4>
-      <div className="text-xs text-muted-foreground">
-        <p>Total spent: {formatCurrency(totalAmount)}</p>
-        <p className="mt-1">All transactions this month ({transactions.length}):</p>
-        
-        {isLoading ? (
-          <div className="py-2 text-center">
-            <p className="text-xs">Loading...</p>
+          
+          <div className="mt-4 pt-3 border-t border-gray-200">
+            <div className="flex justify-between items-center">
+              <span className="font-semibold">Total Expenses</span>
+              <span className="font-bold">{formatCurrency(totalExpenses)}</span>
+            </div>
           </div>
-        ) : transactions.length > 0 ? (
-          <div className="max-h-[300px] overflow-y-auto">
-            <Table className="mt-2 w-full">
-              <TableHeader>
-                <TableRow className="bg-muted/30">
-                  <TableHead className="text-xs py-1 px-2">Date</TableHead>
-                  <TableHead className="text-xs py-1 px-2">Description</TableHead>
-                  <TableHead className="text-xs py-1 px-2 text-right">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {transactions.map((tx) => (
-                  <TableRow key={tx.id} className="text-xs border-b border-border/20">
-                    <TableCell className="py-1 px-2">{formatDate(tx.date)}</TableCell>
-                    <TableCell className="py-1 px-2">{tx.description}</TableCell>
-                    <TableCell className="py-1 px-2 text-right font-medium">
-                      {formatCurrency(tx.amount)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        ) : (
-          <p className="text-xs italic mt-2">
-            No transactions found for this category in the current month.
-          </p>
-        )}
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

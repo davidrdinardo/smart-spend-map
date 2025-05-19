@@ -1,155 +1,201 @@
 
-// Function to parse CSV lines
+// Parse CSV line handling quoted fields correctly
 export function parseCSVLine(line: string): string[] {
-  const result = [];
-  let currentValue = '';
+  const fields: string[] = [];
+  let currentField = '';
   let inQuotes = false;
   
-  try {
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-      
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if ((char === ',' || char === '\t') && !inQuotes) {
-        result.push(currentValue.trim());
-        currentValue = '';
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const nextChar = i < line.length - 1 ? line[i + 1] : '';
+    
+    if (char === '"' && !inQuotes) {
+      inQuotes = true;
+      continue;
+    }
+    
+    if (char === '"' && inQuotes) {
+      if (nextChar === '"') {
+        // Handle escaped quotes
+        currentField += '"';
+        i++; // Skip next quote
       } else {
-        currentValue += char;
+        inQuotes = false;
+      }
+      continue;
+    }
+    
+    if (char === ',' && !inQuotes) {
+      fields.push(currentField.trim());
+      currentField = '';
+      continue;
+    }
+    
+    currentField += char;
+  }
+  
+  // Add the last field
+  fields.push(currentField.trim());
+  
+  return fields;
+}
+
+// Detect headers in CSV files
+export function detectHeaderColumns(headerLine: string): { 
+  dateIndex: number; 
+  descriptionIndex: number; 
+  amountIndex: number;
+  withdrawalIndex: number;
+  depositIndex: number;
+} {
+  // Default indices - used if we can't detect headers
+  let dateIndex = 0;
+  let descriptionIndex = 1;
+  let amountIndex = 2;
+  let withdrawalIndex = -1;
+  let depositIndex = -1;
+  
+  try {
+    // Parse the header line
+    let headers: string[];
+    if (headerLine.includes('"')) {
+      headers = parseCSVLine(headerLine);
+    } else if (headerLine.includes('\t')) {
+      headers = headerLine.split('\t');
+    } else if (headerLine.includes(',')) {
+      headers = headerLine.split(',');
+    } else {
+      headers = headerLine.split(/\s+/);
+    }
+    
+    // Normalize headers to lowercase for easier matching
+    const normalizedHeaders = headers.map(h => h.toLowerCase().trim());
+    
+    // Look for date columns
+    const dateKeywords = ['date', 'time', 'day', 'posted'];
+    for (let i = 0; i < normalizedHeaders.length; i++) {
+      if (dateKeywords.some(keyword => normalizedHeaders[i].includes(keyword))) {
+        dateIndex = i;
+        break;
       }
     }
     
-    // Push the last value
-    result.push(currentValue.trim());
-    console.log("Parsed CSV line:", result);
-    return result;
+    // Look for description columns
+    const descriptionKeywords = ['desc', 'memo', 'narration', 'detail', 'transaction', 'payee', 'name', 'merchant', 'particulars'];
+    for (let i = 0; i < normalizedHeaders.length; i++) {
+      if (descriptionKeywords.some(keyword => normalizedHeaders[i].includes(keyword))) {
+        descriptionIndex = i;
+        break;
+      }
+    }
+    
+    // Check for withdrawal/deposit format
+    const withdrawalKeywords = ['withdraw', 'debit', 'payment', 'out', '-amt', 'spent', 'expense'];
+    const depositKeywords = ['deposit', 'credit', 'received', 'in', '+amt', 'income', 'revenue'];
+    
+    for (let i = 0; i < normalizedHeaders.length; i++) {
+      if (withdrawalKeywords.some(keyword => normalizedHeaders[i].includes(keyword))) {
+        withdrawalIndex = i;
+      }
+      if (depositKeywords.some(keyword => normalizedHeaders[i].includes(keyword))) {
+        depositIndex = i;
+      }
+    }
+    
+    // If we're not in withdrawal/deposit format, look for amount column
+    if (withdrawalIndex === -1 || depositIndex === -1) {
+      const amountKeywords = ['amount', 'amt', 'sum', 'value', 'price', 'total', 'cost', 'balance'];
+      for (let i = 0; i < normalizedHeaders.length; i++) {
+        if (amountKeywords.some(keyword => normalizedHeaders[i].includes(keyword))) {
+          amountIndex = i;
+          break;
+        }
+      }
+    }
   } catch (error) {
-    console.error("Error parsing CSV line:", error, "Line:", line);
-    return [];
+    console.error("Error detecting header columns:", error);
+    // Use default indices if there's an error
   }
-}
-
-// Function to detect header columns in the first line
-export function detectHeaderColumns(headerLine: string): {dateIndex: number, descriptionIndex: number, amountIndex: number, withdrawalIndex: number, depositIndex: number} {
-  const headers = parseCSVLine(headerLine.toLowerCase());
-  console.log("Detected headers:", headers);
   
-  const dateIndex = headers.findIndex(h => h.includes('date'));
-  const descriptionIndex = headers.findIndex(h => 
-    h.includes('description') || h.includes('desc') || h.includes('name') || h.includes('transaction')
-  );
-  const amountIndex = headers.findIndex(h => 
-    h.includes('amount') || h.includes('sum') || h.includes('price') || h.includes('value')
-  );
-  
-  // Special case for withdrawal/deposit format
-  const withdrawalIndex = headers.findIndex(h => 
-    h.includes('withdrawal') || h.includes('debit') || h.includes('withdraw')
-  );
-  const depositIndex = headers.findIndex(h => 
-    h.includes('deposit') || h.includes('credit')
-  );
-  
-  console.log("Column indices - date:", dateIndex, "description:", descriptionIndex, 
-              "amount:", amountIndex, "withdrawals:", withdrawalIndex, "deposits:", depositIndex);
+  console.log(`Detected column indices: date=${dateIndex}, desc=${descriptionIndex}, amount=${amountIndex}, withdrawal=${withdrawalIndex}, deposit=${depositIndex}`);
   
   return {
-    dateIndex: dateIndex >= 0 ? dateIndex : 0,
-    descriptionIndex: descriptionIndex >= 0 ? descriptionIndex : 1,
-    amountIndex: amountIndex >= 0 ? amountIndex : 2,
-    withdrawalIndex: withdrawalIndex,
-    depositIndex: depositIndex
+    dateIndex,
+    descriptionIndex,
+    amountIndex,
+    withdrawalIndex,
+    depositIndex
   };
 }
 
-// Function to parse dates from various formats
-export function parseDate(dateStr: string): string {
+// Parse date string to standard format
+export function parseDate(dateString: string): string {
   try {
-    const cleanedDate = dateStr.replace(/[^\w\/-]/g, '').trim();
-    console.log(`Parsing date: "${dateStr}" (cleaned: "${cleanedDate}")`);
+    // Handle various date formats like MM/DD/YYYY, YYYY-MM-DD, etc.
+    const formats = [
+      { regex: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, transform: (m: RegExpMatchArray) => `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}` },
+      { regex: /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/, transform: (m: RegExpMatchArray) => `20${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}` },
+      { regex: /^(\d{4})-(\d{1,2})-(\d{1,2})$/, transform: (m: RegExpMatchArray) => `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` },
+      { regex: /^(\d{1,2})-(\d{1,2})-(\d{4})$/, transform: (m: RegExpMatchArray) => `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}` }
+    ];
     
-    let match;
-    let year, month, day;
-    
-    if ((match = cleanedDate.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/))) {
-      month = match[1].padStart(2, '0');
-      day = match[2].padStart(2, '0');
-      year = match[3].length === 2 ? `20${match[3]}` : match[3];
-      console.log(`Parsed date as MM/DD/YYYY: ${year}-${month}-${day}`);
-      return `${year}-${month}-${day}`;
+    for (const format of formats) {
+      const match = dateString.match(format.regex);
+      if (match) {
+        return format.transform(match);
+      }
     }
     
-    if ((match = cleanedDate.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/))) {
-      year = match[1];
-      month = match[2].padStart(2, '0');
-      day = match[3].padStart(2, '0');
-      console.log(`Parsed date as YYYY/MM/DD: ${year}-${month}-${day}`);
-      return `${year}-${month}-${day}`;
-    }
-    
-    if ((match = cleanedDate.match(/^(\d{4})-(\d{2})-(\d{2})$/))) {
-      console.log(`Date already in YYYY-MM-DD format: ${cleanedDate}`);
-      return cleanedDate;
-    }
-    
-    const now = new Date();
-    year = now.getFullYear().toString();
-    month = (now.getMonth() + 1).toString().padStart(2, '0');
-    day = now.getDate().toString().padStart(2, '0');
-    
-    console.log(`Could not parse date "${dateStr}", using current date: ${year}-${month}-${day}`);
-    return `${year}-${month}-${day}`;
-  } catch (e) {
-    console.error(`Error parsing date "${dateStr}":`, e);
-    const now = new Date();
-    return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+    // Fallback: return the original string if no format matches
+    return dateString;
+  } catch (error) {
+    console.error("Error parsing date:", dateString, error);
+    return dateString;
   }
 }
 
-// Function to safely parse amount strings
-export function parseAmount(amountStr: string): number | null {
+// Parse amount string to number
+export function parseAmount(amountString: string): number | null {
   try {
-    let cleaned = amountStr.toString().replace(/[$,\s]/g, '');
+    if (!amountString) return null;
     
-    console.log(`Parsing amount: "${amountStr}" (cleaned: "${cleaned}")`);
+    // Clean up the string
+    let cleaned = amountString.trim();
     
-    let multiplier = 1;
-    if (cleaned.match(/^\(.*\)$/)) {
-      cleaned = cleaned.replace(/[()]/g, '');
-      multiplier = -1;
-      console.log(`Amount in parentheses, applying negative multiplier. Cleaned: "${cleaned}"`);
+    // Check if it's a negative amount in parentheses like (123.45)
+    const isNegative = cleaned.startsWith('-') || 
+                       cleaned.startsWith('(') && cleaned.endsWith(')') || 
+                       cleaned.toLowerCase().includes('dr');
+    
+    // Remove all non-numeric characters except for decimal point
+    cleaned = cleaned.replace(/[^\d.-]/g, '');
+    
+    // Handle case where there might be multiple decimal points
+    const parts = cleaned.split('.');
+    if (parts.length > 2) {
+      cleaned = parts[0] + '.' + parts.slice(1).join('');
     }
     
-    if (!/^-?\d*\.?\d*$/.test(cleaned)) {
-      console.log(`Invalid amount format: "${cleaned}"`);
-      return null;
+    // Convert to number
+    let amount = parseFloat(cleaned);
+    
+    // Apply negative if needed
+    if (isNegative && amount > 0) {
+      amount = -amount;
     }
     
-    const amount = parseFloat(cleaned) * multiplier;
-    
-    if (isNaN(amount)) {
-      console.log(`Amount is NaN: "${cleaned}"`);
-      return null;
-    }
-    
-    console.log(`Parsed amount: ${amount}`);
-    return amount;
+    return isNaN(amount) ? null : amount;
   } catch (error) {
-    console.error("Error parsing amount:", error, "Amount string:", amountStr);
+    console.error("Error parsing amount:", amountString, error);
     return null;
   }
 }
 
-// Simple check to see if a line might contain transaction data
+// Check if a line appears to contain transaction data
 export function looksLikeTransactionLine(line: string): boolean {
-  if ((line.match(/,/g) || []).length >= 2 || (line.match(/\t/g) || []).length >= 2) {
-    const hasDatePattern = /\d{1,4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,4}/.test(line);
-    const hasCurrencyPattern = /\$?\d+\.?\d{0,2}/.test(line);
-    console.log(`Line transaction check - Has date: ${hasDatePattern}, Has currency: ${hasCurrencyPattern}`);
-    return hasDatePattern || hasCurrencyPattern;
-  }
-  if (line.split(/\s+/).length >= 3) {
-    return /\d{4}-\d{2}-\d{2}/.test(line) || /\$?\d+\.?\d{0,2}/.test(line);
-  }
-  return false;
+  // Check if line contains a date pattern and amount pattern
+  const datePattern = /\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{1,2}-\d{1,2}/;
+  const amountPattern = /\$?\s*[\d,]+\.\d{2}|-?\$?\s*[\d,]+\.\d{2}|\([\d,]+\.\d{2}\)/;
+  
+  return datePattern.test(line) && amountPattern.test(line);
 }

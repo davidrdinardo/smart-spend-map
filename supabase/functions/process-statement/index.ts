@@ -1,10 +1,9 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { categorizeTransaction } from "./utils/categories.ts";
-import { parseDate, parseAmount } from "./utils/parsers.ts";
 import { extractTransactionsFromPDF } from "./utils/pdfExtractor.ts";
 import { processCSVData } from "./utils/csvProcessor.ts";
+import { categorizeWithAI } from "./utils/aiCategorizer.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -115,28 +114,50 @@ serve(async (req) => {
     
     console.log(`Processing file with extension: ${fileExt} - CSV:${isCSV}, TSV:${isTSV}, PDF:${isPDF}, TXT:${isTXT}`);
     
+    let skippedRows = 0;
+    let totalParsedRows = 0;
+    
     if (isPDF) {
       try {
         const arrayBuffer = await fileData.arrayBuffer();
         const pdfTransactions = await extractTransactionsFromPDF(arrayBuffer);
         
+        totalParsedRows = pdfTransactions.length;
         console.log("PDF transactions extracted:", pdfTransactions.length);
         
+        // Process each transaction
         for (const tx of pdfTransactions) {
           const { date, description, amount } = tx;
+          
+          // Skip transactions missing essential data
+          if (!date || !description || amount === undefined || isNaN(amount)) {
+            skippedRows++;
+            console.log(`Skipping incomplete PDF transaction: ${JSON.stringify(tx)}`);
+            continue;
+          }
           
           console.log("Processing PDF transaction:", { date, description, amount });
           
           // Determine transaction type based on amount
           const type = amount >= 0 ? 'income' : 'expense';
           
-          // Apply proper categorization based on type and description
-          let category;
-          if (type === 'income') {
-            category = 'Income';
-          } else {
-            // For expenses, pass a negative value to ensure proper categorization
-            category = categorizeTransaction(description, amount);
+          // Use AI for categorization
+          let category = await categorizeWithAI(description, amount);
+          
+          // Check for duplicates before inserting
+          const { data: existingTx, error: queryError } = await supabase
+            .from('transactions')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('date', date)
+            .eq('description', description)
+            .eq('amount', Math.abs(amount))
+            .maybeSingle();
+            
+          if (existingTx) {
+            console.log(`Skipping duplicate transaction: ${date} | ${description} | ${Math.abs(amount)}`);
+            skippedRows++;
+            continue;
           }
           
           transactions.push({
@@ -178,7 +199,28 @@ serve(async (req) => {
         console.log("File content sample:", text.substring(0, 500));
         
         const csvTransactions = await processCSVData(text, userId, fileId, monthKey);
-        transactions.push(...csvTransactions);
+        totalParsedRows = csvTransactions.length;
+        
+        // Check for duplicates before adding to final transaction list
+        for (const tx of csvTransactions) {
+          // Check for duplicates before inserting
+          const { data: existingTx, error: queryError } = await supabase
+            .from('transactions')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('date', tx.date)
+            .eq('description', tx.description)
+            .eq('amount', tx.amount)
+            .maybeSingle();
+            
+          if (existingTx) {
+            console.log(`Skipping duplicate transaction: ${tx.date} | ${tx.description} | ${tx.amount}`);
+            skippedRows++;
+            continue;
+          }
+          
+          transactions.push(tx);
+        }
         
       } catch (error) {
         console.error("Error reading file:", error);
@@ -236,10 +278,11 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         message: insertedCount > 0 
-          ? `Processed and inserted ${insertedCount} transactions out of ${transactions.length} parsed` 
+          ? `Processed and inserted ${insertedCount} transactions${skippedRows > 0 ? ` (${skippedRows} skipped)` : ''}` 
           : "No transactions were found in the uploaded files",
         details: {
-          total_transactions: transactions.length,
+          total_parsed: totalParsedRows,
+          skipped_rows: skippedRows,
           inserted_transactions: insertedCount
         }
       }),

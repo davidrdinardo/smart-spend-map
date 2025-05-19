@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { processFiles, ensureStorageBucketExists } from './upload/utils';
 import { ProcessingStatus } from './upload/ProcessingStatus';
 import { MonthSelector } from './upload/MonthSelector';
+import { useNavigate } from 'react-router-dom';
 
 interface UploadWidgetProps {
   onComplete: () => void;
@@ -24,8 +25,15 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
   const [uploadProgress, setUploadProgress] = useState(0);
   const [processingResult, setProcessingResult] = useState<string | null>(null);
   const [processingError, setProcessingError] = useState<string | null>(null);
+  const [processingDetails, setProcessingDetails] = useState<{
+    total_parsed?: number;
+    skipped_rows?: number;
+    inserted_transactions?: number;
+  } | null>(null);
+  
   const { toast } = useToast();
   const { user } = useAuth();
+  const navigate = useNavigate();
   
   // Added selected month state with default to current month
   const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
@@ -95,9 +103,32 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
       
       if (result.success) {
         setProcessingResult(result.message);
-        // Wait a moment before completing to show the success message
+        setProcessingDetails(result.details || null);
+        
+        // Wait a moment before showing success message
         setTimeout(() => {
+          // Show appropriate toast based on result
+          if (result.details?.inserted_transactions === 0) {
+            toast({
+              title: "No transactions found",
+              description: "We couldn't find any transactions in that file.",
+              variant: "default",
+            });
+          } else {
+            const skippedMessage = result.details?.skipped_rows > 0 
+              ? ` (${result.details.skipped_rows} rows skipped due to missing data or duplicates)`
+              : '';
+              
+            toast({
+              title: "Statement processed successfully",
+              description: `${result.details?.inserted_transactions || 0} transactions imported${skippedMessage}`,
+              variant: "default",
+            });
+          }
+
+          // Complete and redirect to dashboard
           onComplete();
+          navigate('/dashboard');
         }, 1500);
       } else {
         throw new Error(result.error || "Unknown processing error");
@@ -137,6 +168,7 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
     setUploadProgress(0);
     setProcessingResult(null);
     setProcessingError(null);
+    setProcessingDetails(null);
     
     try {
       // Ensure bucket exists
@@ -286,6 +318,7 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
                 processingResult={processingResult}
                 processingError={processingError}
                 uploadedFilesCount={files.length}
+                processingDetails={processingDetails}
               />
             )}
           </CardContent>

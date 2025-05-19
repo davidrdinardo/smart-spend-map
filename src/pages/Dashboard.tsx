@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import { BarChartDisplay } from '@/components/BarChartDisplay';
 import { CategoryBreakdownChart } from '@/components/CategoryBreakdownChart';
 import { UploadWidget } from '@/components/UploadWidget';
 import { UploadDropdown } from '@/components/upload/UploadDropdown';
+import { NetBalanceIndicator } from '@/components/dashboard/NetBalanceIndicator';
 import { useToast } from '@/hooks/use-toast';
 import { Transaction, MonthSummary, CategorySummary, MonthData } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
@@ -223,8 +225,8 @@ const Dashboard = () => {
   const handleUploadComplete = () => {
     setShowUpload(false);
     toast({
-      title: "Upload successful!",
-      description: "Your files have been processed successfully.",
+      title: "Statement uploaded successfully!",
+      description: "Your transactions have been processed and categorized.",
     });
     
     // Force refresh data with some delay to ensure processing is complete
@@ -359,6 +361,8 @@ const Dashboard = () => {
     );
   }
 
+  const hasTransactions = transactions.length > 0;
+
   return (
     <div className="min-h-screen bg-gray-50">
       {showUpload ? (
@@ -414,6 +418,13 @@ const Dashboard = () => {
                   ${monthSummary.income.toFixed(2)}
                 </CardTitle>
               </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <p className="text-sm text-gray-500">Loading...</p>
+                ) : !hasTransactions ? (
+                  <p className="text-sm text-gray-500">No income data available</p>
+                ) : null}
+              </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
@@ -422,24 +433,21 @@ const Dashboard = () => {
                   ${monthSummary.expenses.toFixed(2)}
                 </CardTitle>
               </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Net Balance</CardDescription>
-                <CardTitle className={`text-2xl ${monthSummary.net >= 0 ? 'text-income-dark' : 'text-expense-dark'}`}>
-                  ${monthSummary.net.toFixed(2)}
-                </CardTitle>
-              </CardHeader>
               <CardContent>
                 {isLoading ? (
                   <p className="text-sm text-gray-500">Loading...</p>
-                ) : transactions.length === 0 ? (
-                  <p className="text-sm text-gray-500">
-                    Upload statements to see your financial summary.
-                  </p>
+                ) : !hasTransactions ? (
+                  <p className="text-sm text-gray-500">No expense data available</p>
                 ) : null}
               </CardContent>
             </Card>
+            
+            {/* Use the new NetBalanceIndicator component */}
+            <NetBalanceIndicator 
+              net={monthSummary.net}
+              loading={isLoading}
+              transactionsExist={hasTransactions}
+            />
           </div>
           
           {/* Expense Breakdown Section */}
@@ -447,7 +455,7 @@ const Dashboard = () => {
             <CategoryBreakdownChart categoryData={categoryData} />
           </div>
           
-          {/* Charts Section - REMOVED the Expenses by Category chart */}
+          {/* Charts Section */}
           <div className="mb-8">
             <Card>
               <CardHeader>
@@ -469,7 +477,7 @@ const Dashboard = () => {
                   `${transactions.length} transactions found`}
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="overflow-x-auto">
               <TransactionTable 
                 transactions={transactions} 
                 onUpdateCategory={handleUpdateCategory} 

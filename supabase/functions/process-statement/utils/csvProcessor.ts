@@ -1,6 +1,6 @@
 
-import { parseCSVLine, detectHeaderColumns, parseDate, parseAmount, looksLikeTransactionLine } from "./parsers.ts";
-import { categorizeTransaction } from "./categories.ts";
+import { parseCSVLine, detectHeaderColumns, parseDate, parseAmount } from "./parsers.ts";
+import { categorizeWithAI } from "./aiCategorizer.ts";
 
 export async function processCSVData(
   text: string, 
@@ -63,6 +63,7 @@ export async function processCSVData(
     
     let validTransactionsCount = 0;
     let skippedLinesCount = 0;
+    let duplicateCount = 0;
     
     let headerLine = lines[0];
     let startIndex = 0;
@@ -81,6 +82,9 @@ export async function processCSVData(
     } else {
       console.log("No header detected, using default column order");
     }
+    
+    // Track transactions to detect duplicates
+    const existingTransactions = new Set();
     
     // Process each line
     for (let i = startIndex; i < lines.length; i++) {
@@ -117,6 +121,12 @@ export async function processCSVData(
       // Extract date and description
       const dateField = fields[columnIndices.dateIndex];
       const descriptionField = fields[columnIndices.descriptionIndex];
+      
+      if (!dateField || !descriptionField) {
+        console.log(`Skipping line ${i+1}: Missing date or description`);
+        skippedLinesCount++;
+        continue;
+      }
       
       let amount;
       let isExpense = false;
@@ -186,17 +196,19 @@ export async function processCSVData(
       
       const date = parseDate(dateField);
       const description = descriptionField.trim();
-      
       const type = isExpense ? 'expense' : 'income';
       
-      // Fixed categorization logic here
-      let category;
-      if (type === 'income') {
-        category = 'Income';
-      } else {
-        // For expenses, ensure we're passing a negative value to categorize correctly
-        category = categorizeTransaction(description, -amount); // Use negative amount for expenses
+      // Check for duplicates
+      const transactionKey = `${date}|${description}|${amount}`;
+      if (existingTransactions.has(transactionKey)) {
+        console.log(`Skipping duplicate transaction: ${transactionKey}`);
+        duplicateCount++;
+        continue;
       }
+      existingTransactions.add(transactionKey);
+      
+      // Use AI for categorization (with sign for proper context)
+      let category = await categorizeWithAI(description, isExpense ? -amount : amount);
       
       console.log(`Line ${i+1}: Adding transaction: ${date} | ${description} | ${amount} | ${type} | ${category}`);
       
@@ -214,7 +226,7 @@ export async function processCSVData(
       validTransactionsCount++;
     }
     
-    console.log(`Parsed ${transactions.length} transactions (valid: ${validTransactionsCount}, skipped: ${skippedLinesCount})`);
+    console.log(`Parsed ${validTransactionsCount} transactions (skipped: ${skippedLinesCount}, duplicates: ${duplicateCount})`);
     return transactions;
   } catch (error) {
     console.error("Error processing CSV data:", error);
