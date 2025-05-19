@@ -1,10 +1,10 @@
 
-import { createContext, useContext, useEffect, useState, useRef } from 'react';
+import { createContext, useEffect, useState, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase, checkAuthState, refreshSessionIfNeeded } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
 
-type AuthContextType = {
+export type AuthContextType = {
   session: Session | null;
   user: User | null;
   loading: boolean;
@@ -13,7 +13,8 @@ type AuthContextType = {
   authDebugInfo: () => any;
 };
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// Create the context with explicit typing
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -218,11 +219,3 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     </AuthContext.Provider>
   );
 }
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};

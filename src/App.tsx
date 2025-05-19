@@ -4,12 +4,13 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "@/providers/AuthProvider";
+import { AuthProvider } from "@/providers/AuthProvider";
 import { ReactNode, useEffect } from "react";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
+import { useAuth } from "@/hooks/useAuth"; // Import from the correct location
 
 const queryClient = new QueryClient();
 
@@ -74,7 +75,7 @@ const PublicRoute = ({ children }: { children: ReactNode }) => {
   return <>{children}</>;
 };
 
-// The actual app with routing
+// The AppRoutes component which uses the auth context
 const AppRoutes = () => {
   return (
     <Routes>
@@ -95,6 +96,7 @@ const AppRoutes = () => {
   );
 };
 
+// The main App component that sets up providers
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
