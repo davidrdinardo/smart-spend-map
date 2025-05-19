@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { TransactionTable } from '@/components/TransactionTable';
-import { PieChartDisplay } from '@/components/PieChartDisplay';
 import { BarChartDisplay } from '@/components/BarChartDisplay';
 import { CategoryBreakdownChart } from '@/components/CategoryBreakdownChart';
 import { UploadWidget } from '@/components/UploadWidget';
@@ -419,16 +418,8 @@ const Dashboard = () => {
             <CategoryBreakdownChart categoryData={categoryData} />
           </div>
           
-          {/* Charts Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-            <Card>
-              <CardHeader>
-                <CardTitle>Expenses by Category</CardTitle>
-              </CardHeader>
-              <CardContent className="h-80">
-                <PieChartDisplay data={categoryData} />
-              </CardContent>
-            </Card>
+          {/* Charts Section - REMOVED the Expenses by Category chart */}
+          <div className="mb-8">
             <Card>
               <CardHeader>
                 <CardTitle>Monthly Net Balance</CardTitle>
