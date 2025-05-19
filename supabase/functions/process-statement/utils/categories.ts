@@ -120,8 +120,13 @@ export function categorizeTransaction(description: string, amount: number): stri
     if (category === 'income') continue; // Skip the income category for expense transactions
     
     if (keywords.some(keyword => description.includes(keyword))) {
-      // Convert first letter to uppercase for category name
-      return category.charAt(0).toUpperCase() + category.slice(1);
+      // Format the category name consistently with spaces
+      // Convert camelCase to Title Case with spaces
+      const formattedCategory = category
+        .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+        .replace(/^./, str => str.toUpperCase()); // Capitalize first letter
+      
+      return formattedCategory.trim(); // Remove any leading/trailing spaces
     }
   }
   

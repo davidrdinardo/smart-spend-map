@@ -51,12 +51,12 @@ export const CategoryBreakdownChart = ({ categoryData }: CategoryBreakdownProps)
     const standardName = standardizeCategory(category.category);
     
     // Check if this standardized category name already exists in our accumulator
-    const existingCategory = acc.find(c => standardizeCategory(c.category) === standardName);
+    const existingCategoryIndex = acc.findIndex(c => standardizeCategory(c.category) === standardName);
     
-    if (existingCategory) {
+    if (existingCategoryIndex >= 0) {
       // If it exists, add the amount to the existing category
-      existingCategory.amount += category.amount;
-      existingCategory.percentage += category.percentage;
+      acc[existingCategoryIndex].amount += category.amount;
+      acc[existingCategoryIndex].percentage += category.percentage;
     } else {
       // Otherwise add it as a new category with the standardized name
       acc.push({
