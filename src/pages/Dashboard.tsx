@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -33,7 +34,7 @@ const Dashboard = () => {
   const [categoryData, setCategoryData] = useState<CategorySummary[]>([]);
   const [monthlyData, setMonthlyData] = useState<MonthData[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [availableMonths, setAvailableMonths<{key: string, label: string}[]>([]);
+  const [availableMonths, setAvailableMonths] = useState<{key: string, label: string}[]>([]);
   
   // Check for authentication
   useEffect(() => {
