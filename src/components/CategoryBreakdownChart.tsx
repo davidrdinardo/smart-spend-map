@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PieChartDisplay } from '@/components/PieChartDisplay';
@@ -20,6 +19,8 @@ import {
   TableBody,
   TableCell,
   TableRow,
+  TableHeader,
+  TableHead,
 } from "@/components/ui/table";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from '@/components/ui/button';
@@ -165,14 +166,18 @@ const CategoryDetail = ({ category, totalAmount }: CategoryDetailProps) => {
         const { data: user } = await supabase.auth.getUser();
         if (!user.user) return;
 
-        // Fetch the 3 most recent transactions for this category
+        // Get the current month key in yyyy-MM format
+        const currentMonth = new Date();
+        const monthKey = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+
+        // Fetch all transactions for this category in the current month
         const { data, error } = await supabase
           .from('transactions')
           .select('id, date, description, amount')
           .eq('category', category)
           .eq('user_id', user.user.id)
-          .order('date', { ascending: false })
-          .limit(3);
+          .eq('month_key', monthKey)
+          .order('date', { ascending: false });
 
         if (error) throw error;
         setTransactions(data || []);
@@ -196,29 +201,38 @@ const CategoryDetail = ({ category, totalAmount }: CategoryDetailProps) => {
       <h4 className="text-sm font-medium">{category} Breakdown</h4>
       <div className="text-xs text-muted-foreground">
         <p>Total spent: {formatCurrency(totalAmount)}</p>
-        <p className="mt-1">Last {transactions.length > 0 ? transactions.length : 3} transactions:</p>
+        <p className="mt-1">All transactions this month ({transactions.length}):</p>
         
         {isLoading ? (
           <div className="py-2 text-center">
             <p className="text-xs">Loading...</p>
           </div>
         ) : transactions.length > 0 ? (
-          <Table className="mt-2">
-            <TableBody>
-              {transactions.map((tx) => (
-                <TableRow key={tx.id} className="text-xs border-b border-border/20">
-                  <TableCell className="py-1 px-2">{formatDate(tx.date)}</TableCell>
-                  <TableCell className="py-1 px-2">{tx.description}</TableCell>
-                  <TableCell className="py-1 px-2 text-right font-medium">
-                    {formatCurrency(tx.amount)}
-                  </TableCell>
+          <div className="max-h-[300px] overflow-y-auto">
+            <Table className="mt-2 w-full">
+              <TableHeader>
+                <TableRow className="bg-muted/30">
+                  <TableHead className="text-xs py-1 px-2">Date</TableHead>
+                  <TableHead className="text-xs py-1 px-2">Description</TableHead>
+                  <TableHead className="text-xs py-1 px-2 text-right">Amount</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {transactions.map((tx) => (
+                  <TableRow key={tx.id} className="text-xs border-b border-border/20">
+                    <TableCell className="py-1 px-2">{formatDate(tx.date)}</TableCell>
+                    <TableCell className="py-1 px-2">{tx.description}</TableCell>
+                    <TableCell className="py-1 px-2 text-right font-medium">
+                      {formatCurrency(tx.amount)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         ) : (
           <p className="text-xs italic mt-2">
-            No recent transactions found for this category.
+            No transactions found for this category in the current month.
           </p>
         )}
       </div>
