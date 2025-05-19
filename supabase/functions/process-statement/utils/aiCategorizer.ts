@@ -61,7 +61,12 @@ export async function categorizeWithAI(description: string, amount: number): Pro
   }
 }
 
-// New batch categorization function to process up to 100 transactions at once
+// Estimate tokens for a string (approx 4 chars = 1 token)
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+// New batch categorization function optimized for token efficiency
 export async function categorizeBatch(transactions: { description: string, amount: number }[]): Promise<string[]> {
   if (transactions.length === 0) return [];
   
@@ -74,24 +79,73 @@ export async function categorizeBatch(transactions: { description: string, amoun
     );
   }
   
-  try {
-    console.log(`Batch categorizing ${transactions.length} transactions with OpenAI`);
+  // Token limits and estimates
+  const MAX_TOKENS = 4000;
+  const MAX_COMPLETION_TOKENS = 500;
+  const AVAILABLE_TOKENS = MAX_TOKENS - MAX_COMPLETION_TOKENS;
+  
+  const systemPrompt = `
+    You are a financial transaction categorizer. Categorize each transaction into one of these categories:
+    Housing, Transportation, Groceries, Dining Out, Utilities, Subscriptions, Healthcare, Insurance, 
+    Child Care, Education, Entertainment, Travel, Personal Care, Gifts/Donations, Savings/Investments, Income, Other.
     
-    const systemPrompt = `
-      You will be given a list of financial transactions. 
-      Categorize each transaction into one of these categories:
-      Housing, Transportation, Groceries, Dining Out, Utilities, Subscriptions, Healthcare, Insurance, 
-      Child Care, Education, Entertainment, Travel, Personal Care, Gifts/Donations, Savings/Investments, Income, Other.
-      
-      For each transaction, ONLY return the appropriate category name with proper capitalization.
-      Format your response as a JSON array of category names, with one category per transaction, in the same order.
-    `;
+    Format your response as a JSON array with ONLY category names, no explanations. Each category should
+    correspond to the transaction at the same index. Example response format: ["Housing", "Groceries", "Income"]
+  `;
+  
+  const systemPromptTokens = estimateTokens(systemPrompt);
+  console.log(`System prompt estimated tokens: ${systemPromptTokens}`);
+  
+  // Split transactions into chunks based on token estimates
+  const chunks: Array<{ description: string, amount: number }[]> = [];
+  let currentChunk: { description: string, amount: number }[] = [];
+  let currentTokens = systemPromptTokens;
+  
+  for (const tx of transactions) {
+    // Estimate tokens for this transaction
+    const txText = JSON.stringify({
+      description: tx.description,
+      amount: tx.amount < 0 ? "expense" : "income",
+      value: Math.abs(tx.amount)
+    });
+    const txTokens = estimateTokens(txText);
     
-    const userContent = transactions.map((tx, index) => 
-      `Transaction ${index + 1}: Description: ${tx.description}, Amount: ${tx.amount < 0 ? "expense" : "income"} $${Math.abs(tx.amount)}`
-    ).join("\n");
+    // Check if adding this transaction would exceed the token limit
+    if (currentTokens + txTokens > AVAILABLE_TOKENS && currentChunk.length > 0) {
+      // Start a new chunk
+      chunks.push(currentChunk);
+      currentChunk = [tx];
+      currentTokens = systemPromptTokens + txTokens;
+    } else {
+      // Add to the current chunk
+      currentChunk.push(tx);
+      currentTokens += txTokens;
+    }
+  }
+  
+  // Add the last chunk if it has any transactions
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk);
+  }
+  
+  console.log(`Split ${transactions.length} transactions into ${chunks.length} chunks for processing`);
+  
+  // Process each chunk
+  const results: string[] = [];
+  
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    console.log(`Processing chunk ${i + 1}/${chunks.length} with ${chunk.length} transactions...`);
     
     try {
+      // Format transactions as compact JSON
+      const txData = chunk.map(tx => ({
+        desc: tx.description,
+        amt: tx.amount < 0 ? "expense" : "income",
+        val: Math.abs(tx.amount)
+      }));
+      
+      // Make the API call
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -102,51 +156,68 @@ export async function categorizeBatch(transactions: { description: string, amoun
           model: "gpt-3.5-turbo",
           messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: userContent }
+            { role: "user", content: JSON.stringify(txData) }
           ],
           temperature: 0.3,
-          max_tokens: 800,
+          max_tokens: MAX_COMPLETION_TOKENS,
           response_format: { type: "json_object" }
         })
       });
       
       if (!response.ok) {
         const error = await response.text();
-        console.error("OpenAI API batch error:", error);
+        console.error(`OpenAI API error for chunk ${i + 1}:`, error);
         throw new Error(`OpenAI API error: ${error}`);
       }
       
       const data = await response.json();
       const content = data.choices[0].message.content.trim();
       
-      // Parse the JSON response safely
+      // Parse the response and get categories
       try {
-        const jsonResponse = JSON.parse(content);
-        if (Array.isArray(jsonResponse.categories)) {
-          // Ensure we have the correct number of categories
-          if (jsonResponse.categories.length === transactions.length) {
-            // Standardize each category
-            return jsonResponse.categories.map(cat => standardizeCategory(String(cat)));
-          }
-        }
+        const parsedResponse = JSON.parse(content);
+        const chunkCategories = Array.isArray(parsedResponse.categories) 
+          ? parsedResponse.categories 
+          : (Array.isArray(parsedResponse) ? parsedResponse : []);
         
-        console.error("Invalid response format from OpenAI batch categorization:", content);
-        throw new Error("Invalid response format");
+        // Validate we have the right number of categories
+        if (chunkCategories.length !== chunk.length) {
+          console.error(`Response length mismatch. Expected ${chunk.length}, got ${chunkCategories.length}`);
+          // Fall back to rule-based for this chunk
+          const fallbackCategories = await Promise.all(
+            chunk.map(tx => fallbackCategorization(tx.description, tx.amount))
+          );
+          results.push(...fallbackCategories);
+        } else {
+          // Standardize and add categories to results
+          const standardizedCategories = chunkCategories.map(cat => standardizeCategory(String(cat)));
+          results.push(...standardizedCategories);
+        }
       } catch (parseError) {
-        console.error("Error parsing OpenAI batch response:", parseError, "Response was:", content);
-        throw parseError;
+        console.error(`Error parsing OpenAI response for chunk ${i + 1}:`, parseError, "Response:", content);
+        // Fall back to rule-based for this chunk
+        const fallbackCategories = await Promise.all(
+          chunk.map(tx => fallbackCategorization(tx.description, tx.amount))
+        );
+        results.push(...fallbackCategories);
       }
-    } catch (apiError) {
-      console.error("Error in OpenAI batch API call:", apiError);
-      throw apiError;
+      
+      // Small delay between chunks to avoid rate limiting
+      if (i < chunks.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+      
+    } catch (chunkError) {
+      console.error(`Error processing chunk ${i + 1}:`, chunkError);
+      // Fall back to rule-based for this chunk
+      const fallbackCategories = await Promise.all(
+        chunk.map(tx => fallbackCategorization(tx.description, tx.amount))
+      );
+      results.push(...fallbackCategories);
     }
-  } catch (error) {
-    console.error("Batch categorization failed, falling back to individual categorization:", error);
-    // Fall back to individual categorization
-    return Promise.all(
-      transactions.map(tx => fallbackCategorization(tx.description, tx.amount))
-    );
   }
+  
+  return results;
 }
 
 // Fallback to rule-based categorization if AI fails
