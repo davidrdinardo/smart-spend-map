@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { UploadIcon } from 'lucide-react';
+import { UploadIcon, Loader } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth'; 
 
@@ -13,6 +13,7 @@ export const UploadDropdown: React.FC<UploadDropdownProps> = ({
   onSingleUpload,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -53,9 +54,19 @@ export const UploadDropdown: React.FC<UploadDropdownProps> = ({
       <Button
         onClick={() => setIsOpen(!isOpen)}
         className="bg-income hover:bg-income-dark"
+        disabled={isValidating}
       >
-        <UploadIcon className="mr-2 h-4 w-4" />
-        Upload Statements
+        {isValidating ? (
+          <>
+            <Loader className="mr-2 h-4 w-4 animate-spin" />
+            Checking file...
+          </>
+        ) : (
+          <>
+            <UploadIcon className="mr-2 h-4 w-4" />
+            Upload Statements
+          </>
+        )}
       </Button>
       {isOpen && (
         <div className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
@@ -64,6 +75,7 @@ export const UploadDropdown: React.FC<UploadDropdownProps> = ({
               onClick={handleSingleUpload}
               className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
               role="menuitem"
+              disabled={isValidating}
             >
               Upload Statement
             </button>

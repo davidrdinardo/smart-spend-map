@@ -8,10 +8,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth'; 
 import { v4 as uuidv4 } from 'uuid';
 import { format } from 'date-fns';
-import { processFiles, ensureStorageBucketExists } from './upload/utils';
+import { processFiles, ensureStorageBucketExists, downloadCSVTemplate } from './upload/utils';
 import { ProcessingStatus } from './upload/ProcessingStatus';
 import { MonthSelector } from './upload/MonthSelector';
 import { useNavigate } from 'react-router-dom';
+import { Button } from './ui/button';
+import { AlertCircle, Download } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 
 interface UploadWidgetProps {
   onComplete: () => void;
@@ -21,6 +24,7 @@ interface UploadWidgetProps {
 export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel }) => {
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [validating, setValidating] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [processingResult, setProcessingResult] = useState<string | null>(null);
@@ -62,6 +66,20 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
       checkBucket();
     }
   }, [user, toast]);
+  
+  // Handle file drop and selection with validation
+  const handleFileDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.files.length > 0) {
+      await processFiles(e.dataTransfer.files, setFiles, setValidating);
+    }
+  };
+  
+  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length) {
+      await processFiles(e.target.files, setFiles, setValidating);
+    }
+  };
   
   const triggerProcessing = async (uploadId: string) => {
     if (!user) return;
@@ -281,7 +299,32 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
           <CardContent>
             {!uploading ? (
               <>
-                {/* Added MonthSelector with full 2025 year option */}
+                <div className="mb-4">
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>CSV Format Requirements</AlertTitle>
+                    <AlertDescription>
+                      Your CSV file must include these column headers:
+                      <ul className="list-disc pl-5 pt-2">
+                        <li className="text-xs">date (or transaction_date, posted_date)</li>
+                        <li className="text-xs">description (or memo, details)</li>
+                        <li className="text-xs">amount (or value, transaction_amount)</li>
+                      </ul>
+                      <div className="mt-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="text-xs h-8" 
+                          onClick={downloadCSVTemplate}
+                        >
+                          <Download className="mr-1 h-3 w-3" />
+                          Download Template
+                        </Button>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                </div>
+                
                 <MonthSelector 
                   selectedMonth={selectedMonth} 
                   setSelectedMonth={setSelectedMonth}
@@ -293,17 +336,9 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
                   onDragEnter={(e) => e.preventDefault()}
                   onDragLeave={(e) => e.preventDefault()}
                   onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    if (e.dataTransfer.files.length > 0) {
-                      processFiles(e.dataTransfer.files, setFiles);
-                    }
-                  }}
-                  onFileInputChange={(e) => {
-                    if (e.target.files?.length) {
-                      processFiles(e.target.files, setFiles);
-                    }
-                  }}
+                  onDrop={handleFileDrop}
+                  onFileInputChange={handleFileInputChange}
+                  isValidating={validating}
                 />
                 <FileList files={files} onRemove={(index) => {
                   const newFiles = [...files];
@@ -326,16 +361,16 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
             <button
               className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
               onClick={onCancel}
-              disabled={uploading}
+              disabled={uploading || validating}
             >
               Cancel
             </button>
             <button
-              className="px-4 py-2 bg-income text-white rounded hover:bg-income-dark"
+              className="px-4 py-2 bg-income text-white rounded hover:bg-income-dark disabled:opacity-50"
               onClick={handleUpload}
-              disabled={uploading || files.length === 0}
+              disabled={uploading || validating || files.length === 0}
             >
-              {uploading ? 'Uploading...' : 'Upload'}
+              {uploading ? 'Uploading...' : validating ? 'Checking...' : 'Upload'}
             </button>
           </CardFooter>
         </Card>
