@@ -1,6 +1,6 @@
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { format, parse } from 'date-fns';
+import { format } from 'date-fns';
 
 interface MonthSelectorProps {
   selectedMonth: string;
@@ -23,30 +23,21 @@ export const MonthSelector = ({
     
     // If showFullYear is true, show all months for the specified year
     if (showFullYear) {
-      for (let month = 1; month <= 12; month++) {
-        // Format month to ensure two digits (01, 02, etc.)
-        const formattedMonth = month.toString().padStart(2, '0');
-        const monthKey = `${year}-${formattedMonth}`;
-        
-        // Create a date object for this month
-        const monthDate = new Date(year, month - 1);
-        const monthName = format(monthDate, 'MMMM yyyy');
-        
+      for (let month = 0; month < 12; month++) {
+        const date = new Date(year, month, 1);
+        const monthKey = format(date, 'yyyy-MM');
+        const monthName = format(date, 'MMMM yyyy');
         months.push({ key: monthKey, label: monthName });
       }
     } else {
       // Original behavior - get months for current year and 2 previous years
       for (let yearOffset = currentYear; yearOffset >= currentYear - 2; yearOffset--) {
-        for (let month = 12; month >= 1; month--) {
-          // Format month to ensure two digits (01, 02, etc.)
-          const formattedMonth = month.toString().padStart(2, '0');
-          const monthKey = `${yearOffset}-${formattedMonth}`;
+        for (let month = 11; month >= 0; month--) {
+          const date = new Date(yearOffset, month, 1);
+          if (date > currentDate) continue;
           
-          // Skip future months
-          const monthDate = new Date(yearOffset, month - 1);
-          if (monthDate > currentDate) continue;
-          
-          const monthName = format(monthDate, 'MMMM yyyy');
+          const monthKey = format(date, 'yyyy-MM');
+          const monthName = format(date, 'MMMM yyyy');
           months.push({ key: monthKey, label: monthName });
         }
       }

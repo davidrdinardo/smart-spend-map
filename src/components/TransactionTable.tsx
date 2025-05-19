@@ -41,8 +41,8 @@ export const TransactionTable = ({ transactions, onUpdateCategory }: Transaction
   const [sortField, setSortField] = useState<'date' | 'amount'>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   
-  // Get all expense categories from categories.ts
-  const categoryGroups = Object.keys(categories).filter(cat => cat !== 'income');
+  // Get all expense categories from categories.ts plus Income
+  const categoryGroups = ['Income', ...Object.keys(categories).filter(cat => cat !== 'income')];
   
   // Filter transactions based on search term
   const filteredTransactions = transactions.filter(tx => 
@@ -141,39 +141,37 @@ export const TransactionTable = ({ transactions, onUpdateCategory }: Transaction
                       </span>
                     </TableCell>
                     <TableCell>
-                      {transaction.type === 'income' ? (
-                        'Income'
-                      ) : (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm" className="w-[140px] justify-between">
-                              {transaction.category}
-                              <span>▼</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent className="w-56">
-                            <DropdownMenuLabel>Select Category</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <div className="max-h-[300px] overflow-y-auto">
-                              {categoryGroups.map((categoryGroup) => {
-                                // Format category group name for display (e.g., "diningOut" -> "Dining Out")
-                                const formattedCategoryName = categoryGroup
-                                  .replace(/([A-Z])/g, ' $1')
-                                  .replace(/^./, (str) => str.toUpperCase());
-                                
-                                return (
-                                  <DropdownMenuItem 
-                                    key={categoryGroup}
-                                    onClick={() => onUpdateCategory(transaction.id, formattedCategoryName)}
-                                  >
-                                    {formattedCategoryName}
-                                  </DropdownMenuItem>
-                                );
-                              })}
-                            </div>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm" className="w-[140px] justify-between">
+                            {transaction.category}
+                            <span>▼</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent className="w-56">
+                          <DropdownMenuLabel>Select Category</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <div className="max-h-[300px] overflow-y-auto">
+                            {categoryGroups.map((categoryGroup) => {
+                              // Format category group name for display (e.g., "diningOut" -> "Dining Out")
+                              const formattedCategoryName = categoryGroup === 'Income' 
+                                ? 'Income' 
+                                : categoryGroup
+                                    .replace(/([A-Z])/g, ' $1')
+                                    .replace(/^./, (str) => str.toUpperCase());
+                              
+                              return (
+                                <DropdownMenuItem 
+                                  key={categoryGroup}
+                                  onClick={() => onUpdateCategory(transaction.id, formattedCategoryName)}
+                                >
+                                  {formattedCategoryName}
+                                </DropdownMenuItem>
+                              );
+                            })}
+                          </div>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))
