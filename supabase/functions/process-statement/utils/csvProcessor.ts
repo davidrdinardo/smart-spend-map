@@ -210,6 +210,11 @@ export async function processCSVData(
       // Use AI for categorization (with sign for proper context)
       let category = await categorizeWithAI(description, isExpense ? -amount : amount);
       
+      // Make sure income transactions are categorized as "Income"
+      if (type === 'income') {
+        category = 'Income';
+      }
+      
       console.log(`Line ${i+1}: Adding transaction: ${date} | ${description} | ${amount} | ${type} | ${category}`);
       
       transactions.push({

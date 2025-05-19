@@ -144,6 +144,7 @@ const Dashboard = () => {
       let totalIncome = 0;
       let totalExpenses = 0;
       
+      // Create a map for expense categories
       const categoryAmounts: Record<string, number> = {};
       
       typedTransactions.forEach(tx => {
@@ -153,10 +154,11 @@ const Dashboard = () => {
           totalExpenses += Number(tx.amount);
           
           // Aggregate expenses by category
-          if (!categoryAmounts[tx.category]) {
-            categoryAmounts[tx.category] = 0;
+          const category = tx.category || 'Other';
+          if (!categoryAmounts[category]) {
+            categoryAmounts[category] = 0;
           }
-          categoryAmounts[tx.category] += Number(tx.amount);
+          categoryAmounts[category] += Number(tx.amount);
         }
       });
       
@@ -172,6 +174,7 @@ const Dashboard = () => {
       // Calculate categories for pie chart
       const totalExpenseAmount = Object.values(categoryAmounts).reduce((sum, amount) => sum + amount, 0);
       
+      // Map category data for the chart
       const categoryItems: CategorySummary[] = Object.entries(categoryAmounts).map(([category, amount]) => ({
         category,
         amount,
@@ -364,6 +367,9 @@ const Dashboard = () => {
   }
 
   const hasTransactions = transactions.length > 0;
+  const hasExpenseData = categoryData.length > 0 && categoryData.some(cat => 
+    cat.category.toLowerCase() !== 'income'
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
