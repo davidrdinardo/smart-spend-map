@@ -61,10 +61,7 @@ export const PieChartDisplay = ({ data }: PieChartDisplayProps) => {
   };
 
   // Additional check to ensure we don't render an empty chart
-  const filteredData = data.filter(item => 
-    item.category.toLowerCase() !== 'income' && 
-    item.amount > 0
-  );
+  const filteredData = data.filter(item => item.amount > 0);
 
   return (
     <div className="w-full h-full">

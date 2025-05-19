@@ -21,7 +21,7 @@ const Dashboard = () => {
   const { user, loading, signOut } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(isDeleting);
   
   // Data states
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
@@ -371,9 +371,7 @@ const Dashboard = () => {
   }
 
   const hasTransactions = transactions.length > 0;
-  const hasExpenseData = categoryData.length > 0 && categoryData.some(cat => 
-    cat.category.toLowerCase() !== 'income'
-  );
+  const hasExpenseData = categoryData.length > 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
