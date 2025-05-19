@@ -103,24 +103,22 @@ export const clearSupabaseSession = async () => {
 // We need to cast the RPC calls to specify the parameter types
 export const setPublicBucketPolicy = async (bucketName: string): Promise<boolean> => {
   try {
-    // Define RPC parameter type to avoid TypeScript errors
-    type BucketPolicyParams = {
-      bucket_name: string;
-    };
+    // Define a generic RPC function type for proper TypeScript handling
+    type RpcFunction = <T>(params: Record<string, any>) => T;
     
     // First try to create an RPC function if it doesn't exist
     try {
-      await supabase.rpc('create_bucket_public_policy', { 
+      await (supabase.rpc as any)('create_bucket_public_policy', { 
         bucket_name: bucketName 
-      } as unknown as BucketPolicyParams);
+      });
     } catch (e) {
       console.log('Policy function may already exist:', e);
     }
     
     // Then use the RPC function to set policies
-    const { error } = await supabase.rpc('set_bucket_public_policy', { 
+    const { error } = await (supabase.rpc as any)('set_bucket_public_policy', { 
       bucket_name: bucketName 
-    } as unknown as BucketPolicyParams);
+    });
     
     if (error) {
       console.error("Error setting bucket policy:", error);

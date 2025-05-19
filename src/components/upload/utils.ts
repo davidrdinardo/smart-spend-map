@@ -1,4 +1,3 @@
-
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -126,15 +125,10 @@ export const ensureStorageBucketExists = async (): Promise<boolean> => {
       
       // Set up RLS policies for the bucket (this may require admin access)
       try {
-        // Define RPC parameter type to avoid TypeScript errors
-        type BucketPolicyParams = {
-          bucket_name: string;
-        };
-        
         // Make our bucket publicly readable but only authenticated users can write
-        await supabase.rpc('set_bucket_public_policy', {
+        await (supabase.rpc as any)('set_bucket_public_policy', {
           bucket_name: 'statements'
-        } as unknown as BucketPolicyParams).then(({ error: policyError }) => {
+        }).then(({ error: policyError }: { error: any }) => {
           if (policyError) {
             console.error("Error setting bucket policy:", policyError);
           }
