@@ -1,5 +1,29 @@
+
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+
+// New function to validate file types
+export const validateFileType = (file: File): boolean => {
+  // Get MIME type and extension
+  const fileType = file.type.toLowerCase();
+  const fileExt = file.name.split('.').pop()?.toLowerCase();
+  
+  // Valid MIME types and extensions
+  const validMimeTypes = ['application/pdf', 'text/csv', 'text/tab-separated-values'];
+  const validExtensions = ['pdf', 'csv', 'tsv', 'txt'];
+  
+  if (validMimeTypes.includes(fileType) || validExtensions.includes(fileExt || '')) {
+    return true;
+  }
+  
+  toast({
+    title: "Unsupported file type",
+    description: `${file.name} is not a supported file type. Please use PDF, CSV, TSV, or TXT files.`,
+    variant: "destructive",
+  });
+  
+  return false;
+};
 
 export const validateCSVFormat = async (file: File): Promise<boolean> => {
   try {
@@ -193,24 +217,13 @@ export const processFiles = async (
   files: FileList, 
   setUploadedFiles: React.Dispatch<React.SetStateAction<File[]>>,
 ) => {
-  // Filter only PDF and CSV files
-  const validFiles = Array.from(files).filter(file => {
-    const fileType = file.type.toLowerCase();
-    const fileExt = file.name.split('.').pop()?.toLowerCase();
-    
-    if (fileType === 'application/pdf' || fileType === 'text/csv' || fileType === 'text/tab-separated-values' || 
-        fileExt === 'pdf' || fileExt === 'csv' || fileExt === 'tsv' || fileExt === 'txt') {
-      return true;
-    }
-    
-    toast({
-      title: "Invalid file type",
-      description: `${file.name} is not a supported file type. Please use PDF, CSV, TSV, or TXT files.`,
-      variant: "destructive",
-    });
-    
-    return false;
-  });
+  // Filter only supported file types
+  const validFiles = Array.from(files).filter(file => validateFileType(file));
+  
+  if (validFiles.length === 0) {
+    // No valid files were selected after filtering
+    return;
+  }
   
   // Ensure storage bucket exists before proceeding
   const bucketExists = await ensureStorageBucketExists();

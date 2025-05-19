@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { extractTransactionsFromPDF } from "./utils/pdfExtractor.ts";
 import { processCSVData } from "./utils/csvProcessor.ts";
-import { categorizeWithAI } from "./utils/aiCategorizer.ts";
+import { categorizeWithAI, categorizeBatch } from "./utils/aiCategorizer.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -105,7 +105,7 @@ serve(async (req) => {
     
     console.log("File downloaded successfully");
     
-    const transactions = [];
+    const rawTransactions = [];
     const fileExt = uploadData.filename.toLowerCase().split('.').pop();
     const isCSV = fileExt === 'csv';
     const isTSV = fileExt === 'tsv';
@@ -125,62 +125,34 @@ serve(async (req) => {
         totalParsedRows = pdfTransactions.length;
         console.log("PDF transactions extracted:", pdfTransactions.length);
         
-        // Process each transaction
-        for (const tx of pdfTransactions) {
+        // Filter out transactions missing essential data
+        const validTransactions = pdfTransactions.filter(tx => {
           const { date, description, amount } = tx;
+          const isValid = !!date && !!description && amount !== undefined && !isNaN(amount);
           
-          // Skip transactions missing essential data
-          if (!date || !description || amount === undefined || isNaN(amount)) {
+          if (!isValid) {
             skippedRows++;
             console.log(`Skipping incomplete PDF transaction: ${JSON.stringify(tx)}`);
-            continue;
           }
           
-          console.log("Processing PDF transaction:", { date, description, amount });
-          
-          // Determine transaction type based on amount
-          const type = amount >= 0 ? 'income' : 'expense';
-          
-          // Use AI for categorization
-          let category = await categorizeWithAI(description, amount);
-          
-          // Check for duplicates before inserting
-          const { data: existingTx, error: queryError } = await supabase
-            .from('transactions')
-            .select('id')
-            .eq('user_id', userId)
-            .eq('date', date)
-            .eq('description', description)
-            .eq('amount', Math.abs(amount))
-            .maybeSingle();
-            
-          if (existingTx) {
-            console.log(`Skipping duplicate transaction: ${date} | ${description} | ${Math.abs(amount)}`);
-            skippedRows++;
-            continue;
-          }
-          
-          transactions.push({
+          return isValid;
+        });
+        
+        console.log(`Found ${validTransactions.length} valid transactions from PDF (skipped ${skippedRows})`);
+        
+        // Prepare transactions for batch categorization
+        for (const tx of validTransactions) {
+          rawTransactions.push({
             user_id: userId,
-            date,
-            description,
-            amount: Math.abs(amount),
-            type,
-            category,
+            date: tx.date,
+            description: tx.description,
+            amount: tx.amount,
+            type: tx.amount >= 0 ? 'income' : 'expense',
+            source_upload_id: fileId,
             month_key: monthKey,
-            source_upload_id: fileId
-          });
-          
-          console.log("Added transaction:", {
-            date,
-            description,
-            amount: Math.abs(amount),
-            type,
-            category
+            forAI: { description: tx.description, amount: tx.amount }
           });
         }
-        
-        console.log(`Processed ${transactions.length} transactions from PDF document`);
       } catch (error) {
         console.error("Error processing PDF:", error);
         return new Response(
@@ -201,27 +173,13 @@ serve(async (req) => {
         const csvTransactions = await processCSVData(text, userId, fileId, monthKey);
         totalParsedRows = csvTransactions.length;
         
-        // Check for duplicates before adding to final transaction list
+        // Add CSV transactions to the rawTransactions array with the forAI field
         for (const tx of csvTransactions) {
-          // Check for duplicates before inserting
-          const { data: existingTx, error: queryError } = await supabase
-            .from('transactions')
-            .select('id')
-            .eq('user_id', userId)
-            .eq('date', tx.date)
-            .eq('description', tx.description)
-            .eq('amount', tx.amount)
-            .maybeSingle();
-            
-          if (existingTx) {
-            console.log(`Skipping duplicate transaction: ${tx.date} | ${tx.description} | ${tx.amount}`);
-            skippedRows++;
-            continue;
-          }
-          
-          transactions.push(tx);
+          rawTransactions.push({
+            ...tx,
+            forAI: { description: tx.description, amount: tx.amount }
+          });
         }
-        
       } catch (error) {
         console.error("Error reading file:", error);
         return new Response(
@@ -231,36 +189,125 @@ serve(async (req) => {
       }
     }
     
-    let insertedCount = 0;
-    if (transactions.length > 0) {
-      const BATCH_SIZE = 10;
-      
-      console.log(`Will insert ${transactions.length} transactions in batches of ${BATCH_SIZE}`);
-      
-      for (let i = 0; i < transactions.length; i += BATCH_SIZE) {
-        const batch = transactions.slice(i, i + BATCH_SIZE);
-        console.log(`Inserting batch ${Math.floor(i / BATCH_SIZE) + 1} with ${batch.length} transactions`);
+    // Check for duplicates and filter them out
+    const finalTransactions = [];
+    for (const tx of rawTransactions) {
+      // Check for duplicates before adding
+      const { data: existingTx, error: queryError } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('date', tx.date)
+        .eq('description', tx.description)
+        .eq('amount', Math.abs(tx.amount))
+        .maybeSingle();
         
-        if (batch.length > 0) {
-          console.log("Sample transaction in batch:", batch[0]);
+      if (existingTx) {
+        console.log(`Skipping duplicate transaction: ${tx.date} | ${tx.description} | ${Math.abs(tx.amount)}`);
+        skippedRows++;
+        continue;
+      }
+      
+      finalTransactions.push(tx);
+    }
+    
+    // Process transactions in batches for categorization
+    let insertedCount = 0;
+    if (finalTransactions.length > 0) {
+      console.log(`Will process ${finalTransactions.length} transactions with batch categorization`);
+      
+      // Create batches of up to 100 transactions for categorization
+      const BATCH_SIZE = 100;
+      const INSERTION_BATCH_SIZE = 10;
+      const batches = [];
+      
+      for (let i = 0; i < finalTransactions.length; i += BATCH_SIZE) {
+        batches.push(finalTransactions.slice(i, i + BATCH_SIZE));
+      }
+      
+      // Process each batch for categorization
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex];
+        console.log(`Categorizing batch ${batchIndex + 1} of ${batches.length} with ${batch.length} transactions`);
+        
+        try {
+          // Extract just the fields needed for categorization
+          const forAIBatch = batch.map(tx => tx.forAI);
           
-          try {
-            const { data: insertData, error: insertError } = await supabase
-              .from('transactions')
-              .insert(batch);
-              
-            if (insertError) {
-              console.error(`Error inserting batch ${Math.floor(i / BATCH_SIZE) + 1}:`, insertError);
+          // Get categories for the entire batch at once
+          const categories = await categorizeBatch(forAIBatch);
+          
+          // Assign categories to transactions
+          for (let i = 0; i < batch.length; i++) {
+            if (categories[i]) {
+              batch[i].category = categories[i];
             } else {
-              insertedCount += batch.length;
-              console.log(`Successfully inserted ${batch.length} transactions`);
+              // Fallback if category wasn't returned
+              batch[i].category = batch[i].type === 'income' ? 'Income' : 'Other';
             }
-          } catch (batchError) {
-            console.error(`Exception in batch ${Math.floor(i / BATCH_SIZE) + 1}:`, batchError);
+            
+            // Remove the forAI field before insertion
+            delete batch[i].forAI;
+          }
+          
+          // Insert transactions in smaller sub-batches
+          for (let i = 0; i < batch.length; i += INSERTION_BATCH_SIZE) {
+            const insertBatch = batch.slice(i, i + INSERTION_BATCH_SIZE);
+            console.log(`Inserting sub-batch ${Math.floor(i / INSERTION_BATCH_SIZE) + 1} with ${insertBatch.length} transactions`);
+            
+            if (insertBatch.length > 0) {
+              console.log("Sample transaction in batch:", insertBatch[0]);
+              
+              try {
+                const { data: insertData, error: insertError } = await supabase
+                  .from('transactions')
+                  .insert(insertBatch);
+                  
+                if (insertError) {
+                  console.error(`Error inserting batch:`, insertError);
+                } else {
+                  insertedCount += insertBatch.length;
+                  console.log(`Successfully inserted ${insertBatch.length} transactions`);
+                }
+              } catch (batchError) {
+                console.error(`Exception in batch:`, batchError);
+              }
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        } catch (batchError) {
+          console.error(`Error processing batch ${batchIndex + 1}:`, batchError);
+          
+          // If batch processing fails, fall back to individual processing
+          console.log("Falling back to individual categorization");
+          
+          for (const tx of batch) {
+            try {
+              // Remove the forAI property before insertion
+              const { forAI, ...transactionToInsert } = tx;
+              
+              // Get category for this single transaction
+              const category = await categorizeWithAI(tx.description, tx.amount);
+              transactionToInsert.category = category;
+              
+              const { data, error } = await supabase
+                .from('transactions')
+                .insert([transactionToInsert]);
+                
+              if (!error) {
+                insertedCount++;
+              } else {
+                console.error("Error inserting transaction:", error);
+              }
+            } catch (singleError) {
+              console.error("Error processing single transaction:", singleError);
+            }
+            
+            // Small delay to avoid rate limits
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
         }
-        
-        await new Promise(resolve => setTimeout(resolve, 500));
       }
     } else {
       console.log("No transactions to insert");
