@@ -64,6 +64,7 @@ const Dashboard = () => {
     if (!user) return;
     
     try {
+      setIsLoading(true);
       const { data, error } = await supabase
         .from('transactions')
         .select('month_key')
@@ -108,6 +109,8 @@ const Dashboard = () => {
         description: error.message,
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
   

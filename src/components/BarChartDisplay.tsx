@@ -20,6 +20,11 @@ export const BarChartDisplay = ({ data }: BarChartDisplayProps) => {
     };
   });
   
+  // Sort data by date for proper display
+  formattedData.sort((a, b) => {
+    return a.month_key.localeCompare(b.month_key);
+  });
+  
   return (
     <div className="w-full h-full">
       {data.length > 0 ? (
