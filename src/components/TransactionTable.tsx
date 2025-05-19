@@ -69,9 +69,15 @@ export const TransactionTable = ({ transactions, onUpdateCategory }: Transaction
       setSortDirection('desc');
     }
   };
-  
-  // Debug transactions
-  console.log('Transactions received:', transactions);
+
+  // Handle category update and update type if needed
+  const handleCategoryUpdate = (transactionId: string, newCategory: string) => {
+    // If the category is Income, we need to update the type as well
+    const updatedType = newCategory === 'Income' ? 'income' : 'expense';
+    
+    // Call the onUpdateCategory prop with both category and type
+    onUpdateCategory(transactionId, newCategory, updatedType);
+  };
   
   return (
     <div>
@@ -148,7 +154,7 @@ export const TransactionTable = ({ transactions, onUpdateCategory }: Transaction
                             <span>▼</span>
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent className="w-56">
+                        <DropdownMenuContent className="w-56 bg-white">
                           <DropdownMenuLabel>Select Category</DropdownMenuLabel>
                           <DropdownMenuSeparator />
                           <div className="max-h-[300px] overflow-y-auto">
@@ -163,7 +169,7 @@ export const TransactionTable = ({ transactions, onUpdateCategory }: Transaction
                               return (
                                 <DropdownMenuItem 
                                   key={categoryGroup}
-                                  onClick={() => onUpdateCategory(transaction.id, formattedCategoryName)}
+                                  onClick={() => handleCategoryUpdate(transaction.id, formattedCategoryName)}
                                 >
                                   {formattedCategoryName}
                                 </DropdownMenuItem>

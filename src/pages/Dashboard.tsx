@@ -241,19 +241,31 @@ const Dashboard = () => {
     }, 1000);
   };
   
-  const handleUpdateCategory = async (transactionId: string, newCategory: string) => {
+  const handleUpdateCategory = async (transactionId: string, newCategory: string, newType?: string) => {
     try {
+      const updateData: {category: string, type?: string} = { category: newCategory };
+      
+      // If newType is provided, include it in the update
+      if (newType) {
+        updateData.type = newType;
+      }
+      
       const { error } = await supabase
         .from('transactions')
-        .update({ category: newCategory })
+        .update(updateData)
         .eq('id', transactionId)
         .eq('user_id', user!.id);
         
       if (error) throw error;
       
+      let toastMessage = `Transaction category changed to ${newCategory}.`;
+      if (newType) {
+        toastMessage += ` Transaction type updated to ${newType}.`;
+      }
+      
       toast({
         title: "Category updated",
-        description: `Transaction category changed to ${newCategory}.`,
+        description: toastMessage,
       });
       
       // Refresh data

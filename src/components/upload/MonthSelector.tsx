@@ -34,7 +34,8 @@ export const MonthSelector = ({
       for (let yearOffset = currentYear; yearOffset >= currentYear - 2; yearOffset--) {
         for (let month = 11; month >= 0; month--) {
           const date = new Date(yearOffset, month, 1);
-          if (date > currentDate) continue;
+          // Only include months up to the current month or all months for past years
+          if (yearOffset === currentYear && month > currentDate.getMonth()) continue;
           
           const monthKey = format(date, 'yyyy-MM');
           const monthName = format(date, 'MMMM yyyy');
