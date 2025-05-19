@@ -127,13 +127,13 @@ export const ensureStorageBucketExists = async (): Promise<boolean> => {
       // Set up RLS policies for the bucket (this may require admin access)
       try {
         // Make our bucket publicly readable but only authenticated users can write
-        const { error: policyError } = await supabase.rpc('set_bucket_public_policy', {
+        await supabase.rpc('set_bucket_public_policy', {
           bucket_name: 'statements'
+        }).then(({ error: policyError }) => {
+          if (policyError) {
+            console.error("Error setting bucket policy:", policyError);
+          }
         });
-        
-        if (policyError) {
-          console.error("Error setting bucket policy:", policyError);
-        }
       } catch (policyErr) {
         console.error("Failed to set bucket policy:", policyErr);
         // Continue anyway, user may need to set policies manually
