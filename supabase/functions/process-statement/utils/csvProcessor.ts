@@ -214,8 +214,53 @@ export async function processCSVData(
       if (type === 'expense') {
         try {
           const aiCategory = await categorizeWithAI(description, -amount);
-          if (aiCategory && aiCategory.trim() !== '') {
+          // Make sure we're getting a valid category from AI
+          if (aiCategory && aiCategory.trim() !== '' && aiCategory.toLowerCase() !== 'income') {
             category = aiCategory;
+          } else {
+            // Fall back to rule-based categorization if AI returns "Income" for an expense
+            const lowerDesc = description.toLowerCase();
+            // Check if it's a transfer or bank-related transaction
+            if (lowerDesc.includes('transfer') || 
+                lowerDesc.includes('e-transfer') || 
+                lowerDesc.includes('bank') || 
+                lowerDesc.includes('cibc') || 
+                lowerDesc.includes('deposit')) {
+              if (!lowerDesc.includes('grocery') && !lowerDesc.includes('food') && !lowerDesc.includes('restaurant')) {
+                if (type === 'expense') {
+                  category = 'Banking & Transfers';
+                }
+              }
+            }
+            // Check for groceries or food
+            else if (lowerDesc.includes('farm boy') || 
+                    lowerDesc.includes('grocery') || 
+                    lowerDesc.includes('supermarket') || 
+                    lowerDesc.includes('food')) {
+              category = 'Groceries';
+            }
+            // Check for dining
+            else if (lowerDesc.includes('restaurant') || 
+                    lowerDesc.includes('dining') || 
+                    lowerDesc.includes('cafe') || 
+                    lowerDesc.includes('diner') || 
+                    lowerDesc.includes('mcdonald')) {
+              category = 'Dining Out';
+            }
+            // Check for transportation
+            else if (lowerDesc.includes('gas') || 
+                    lowerDesc.includes('petro') || 
+                    lowerDesc.includes('uber') || 
+                    lowerDesc.includes('taxi')) {
+              category = 'Transportation';
+            }
+            // Shopping
+            else if (lowerDesc.includes('retail purchase')) {
+              category = 'Shopping';
+            }
+            else {
+              category = 'Other';
+            }
           }
         } catch (error) {
           console.error(`Error using AI to categorize: ${error.message}`);

@@ -5,13 +5,13 @@ export const categories = {
   
   utilities: ["electric", "electricity", "water", "gas", "internet", "wifi", "phone", "mobile", "utility", "utilities", "cable", "sewage", "trash", "garbage", "comcast", "verizon", "at&t", "t-mobile", "sprint", "spectrum", "xfinity"],
   
-  groceries: ["grocery", "supermarket", "food", "market", "safeway", "kroger", "trader joe's", "whole foods", "aldi", "walmart", "costco", "target", "sam's club", "publix", "wegmans", "food lion", "sprouts", "meijer", "albertsons", "ralphs", "winn-dixie", "giant", "h-e-b", "farmers market", "bakery"],
+  groceries: ["grocery", "supermarket", "food", "market", "safeway", "kroger", "trader joe's", "whole foods", "aldi", "walmart", "costco", "target", "sam's club", "publix", "wegmans", "food lion", "sprouts", "meijer", "albertsons", "ralphs", "winn-dixie", "giant", "h-e-b", "farmers market", "bakery", "farm boy"],
   
-  "Dining Out": ["restaurant", "cafe", "coffee", "starbucks", "mcdonalds", "dining", "pizza", "burger", "takeout", "ubereats", "doordash", "grubhub", "seamless", "postmates", "delivery", "fast food", "denny's", "applebee's", "chili's", "olive garden", "outback", "chipotle", "panera", "subway", "wendy's", "burger king", "taco bell", "kfc", "ihop", "waffle house", "cheesecake factory", "red lobster", "buffet", "sushi", "thai", "chinese", "mexican", "italian", "dining out"],
+  diningOut: ["restaurant", "cafe", "coffee", "starbucks", "mcdonalds", "dining", "pizza", "burger", "takeout", "ubereats", "doordash", "grubhub", "seamless", "postmates", "delivery", "fast food", "denny's", "applebee's", "chili's", "olive garden", "outback", "chipotle", "panera", "subway", "wendy's", "burger king", "taco bell", "kfc", "ihop", "waffle house", "cheesecake factory", "red lobster", "buffet", "sushi", "thai", "chinese", "mexican", "italian", "diner", "al's diner"],
   
   transportation: [
     // Car-related
-    "gas", "fuel", "chevron", "shell", "car payment", "auto loan", "car insurance", "auto insurance", "car registration", "vehicle registration", "dmv", "parking", "car wash", "oil change", "repair shop", "auto parts", "tire", "autozone", "o'reilly", "dealership", "car rental", "hertz", "enterprise", "avis", "aamco", "jiffy lube", "midas", "toyota", "honda", "ford", "tesla",
+    "gas", "fuel", "chevron", "shell", "car payment", "auto loan", "car insurance", "auto insurance", "car registration", "vehicle registration", "dmv", "parking", "car wash", "oil change", "repair shop", "auto parts", "tire", "autozone", "o'reilly", "dealership", "car rental", "hertz", "enterprise", "avis", "aamco", "jiffy lube", "midas", "toyota", "honda", "ford", "tesla", "petro-canada",
     
     // Public and shared transportation
     "uber", "lyft", "taxi", "cab", "transit", "train", "subway", "bus", "metro", "rail", "ferry", "toll", "transport", "amtrak", "greyhound", "megabus", "rail", "mta", "bart", "caltrain", "commuter"
@@ -52,13 +52,13 @@ export const categories = {
     "subscription", "membership", "monthly fee", "annual fee", "recurring", "auto-renewal", 
     
     // Software & services
-    "software", "app", "google", "apple", "microsoft", "adobe", "dropbox", "aws", "icloud", "microsoft 365", "office 365", "antivirus", "vpn", "domain", "hosting",
+    "software", "app", "google", "apple", "microsoft", "adobe", "dropbox", "aws", "icloud", "microsoft 365", "office 365", "antivirus", "vpn", "domain", "hosting", "paypal",
     
     // Memberships
     "gym", "fitness", "planet fitness", "equinox", "la fitness", "club", "association", "society", "organization"
   ],
   
-  "Personal Care": [
+  personalCare: [
     // Beauty services
     "haircut", "salon", "spa", "massage", "nail", "manicure", "pedicure", "facial", "waxing", "barber", "hair color", "beauty", 
     
@@ -71,10 +71,10 @@ export const categories = {
     "tuition", "school", "university", "college", "campus", "student loan", "education", "course", "class", "degree", "academic", "books", "textbooks", "learning", 
     
     // Professional development
-    "workshop", "seminar", "conference", "certification", "training", "udemy", "coursera", "skillshare", "masterclass", "bootcamp", "tutorial"
+    "workshop", "seminar", "conference", "certification", "training", "udemy", "coursera", "skillshare", "masterclass", "bootcamp", "tutorial", "catholic school"
   ],
   
-  "Child Care": ["childcare", "daycare", "nanny", "babysitter", "preschool", "kid", "children", "baby", "toy", "diaper", "formula", "pediatrician", "school supplies", "children's clothing", "playground"],
+  childcare: ["childcare", "daycare", "nanny", "babysitter", "preschool", "kid", "children", "baby", "toy", "diaper", "formula", "pediatrician", "school supplies", "children's clothing", "playground"],
   
   pets: ["pet", "veterinarian", "vet", "pet store", "petco", "petsmart", "pet food", "pet supplies", "pet insurance", "grooming", "kennel", "boarding", "dog", "cat", "animal"],
   
@@ -89,87 +89,30 @@ export const categories = {
     "vacation", "travel", "trip", "tour", "tourism", "sightseeing", "excursion"
   ],
   
-  "Gifts/Donations": ["gift", "present", "donation", "charity", "nonprofit", "contribution", "wedding gift", "birthday gift", "holiday gift", "registry"],
+  gifts: ["gift", "present", "donation", "charity", "nonprofit", "contribution", "wedding gift", "birthday gift", "holiday gift", "registry"],
   
-  taxes: ["tax", "taxes", "irs", "state tax", "property tax", "tax preparation", "turbotax", "h&r block", "accountant", "cpa", "tax return"],
+  taxes: ["tax", "taxes", "irs", "state tax", "property tax", "tax preparation", "turbotax", "h&r block", "accountant", "cpa", "tax return", "cra", "revenue"],
   
   insurance: ["insurance", "premium", "life insurance", "home insurance", "renter's insurance", "auto insurance", "liability", "umbrella policy", "insurance claim"],
   
-  income: ["paycheck", "deposit", "salary", "income", "payment received", "venmo received", "zelle received", "transfer received", "freelance", "interest", "dividend", "refund", "reimbursement", "cash back", "bonus", "commission", "profit", "revenue"],
+  income: ["paycheck", "deposit", "salary", "income", "payment received", "venmo received", "zelle received", "transfer received", "freelance", "interest", "dividend", "refund", "reimbursement", "cash back", "bonus", "commission", "profit", "revenue", "carbon rebate", "pay ottawa catholic"],
   
-  "Savings/Investments": ["savings", "investment", "401k", "ira", "roth", "etf", "stock", "bond", "mutual fund", "retirement", "brokerage", "fidelity", "vanguard", "charles schwab", "robinhood", "coinbase", "crypto", "bitcoin", "transfer to savings"],
+  savings: ["savings", "investment", "401k", "ira", "roth", "etf", "stock", "bond", "mutual fund", "retirement", "brokerage", "fidelity", "vanguard", "charles schwab", "robinhood", "coinbase", "crypto", "bitcoin", "transfer to savings", "cibc"],
   
   debt: ["loan payment", "credit card payment", "student loan", "debt", "principal", "interest", "financing", "installment", "lending", "credit", "chase", "bank of america", "wells fargo", "citibank", "capital one", "discover", "amex", "american express", "loan servicing"],
   
-  "Bank Fees": ["fee", "service charge", "overdraft", "late fee", "wire transfer fee", "atm fee", "foreign transaction fee", "monthly maintenance fee", "insufficient funds", "annual fee", "minimum balance fee", "checking fee", "bank fee", "administration fee", "processing fee"],
+  bankFees: ["fee", "service charge", "overdraft", "late fee", "wire transfer fee", "atm fee", "foreign transaction fee", "monthly maintenance fee", "insufficient funds", "annual fee", "minimum balance fee", "checking fee", "bank fee", "administration fee", "processing fee"],
   
-  other: []
+  uncategorizedExpense: []
 };
 
-// Function to standardize category names consistently
+// Function to standardize category names
 export function standardizeCategory(category: string): string {
-  // First normalize the case (if category is a string)
-  if (typeof category !== 'string') {
-    return 'Other';
-  }
-  
-  // Handle special cases with explicit mapping
-  const specialCaseMap: Record<string, string> = {
-    'diningout': 'Dining Out',
-    'dining out': 'Dining Out',
-    'dining': 'Dining Out',
-    'personalcare': 'Personal Care',
-    'personal care': 'Personal Care',
-    'childcare': 'Child Care',
-    'child care': 'Child Care',
-    'bankfees': 'Bank Fees',
-    'bank fees': 'Bank Fees',
-    'uncategorized': 'Other',
-    'uncategorizedexpense': 'Other',
-    'gift': 'Gifts/Donations',
-    'gifts': 'Gifts/Donations',
-    'donations': 'Gifts/Donations',
-    'saving': 'Savings/Investments',
-    'investments': 'Savings/Investments',
-    'income': 'Income'
-  };
-  
-  // Check case-insensitive match in the special case map
-  const lowerCategory = category.toLowerCase();
-  for (const [key, value] of Object.entries(specialCaseMap)) {
-    if (lowerCategory === key.toLowerCase()) {
-      return value;
-    }
-  }
-  
-  // Check if the category is already a recognized category name with proper case
-  const standardCategories = [
-    'Housing', 'Transportation', 'Groceries', 'Dining Out', 'Utilities',
-    'Subscriptions', 'Healthcare', 'Insurance', 'Child Care', 'Education',
-    'Entertainment', 'Travel', 'Personal Care', 'Gifts/Donations',
-    'Savings/Investments', 'Income', 'Other', 'Bank Fees', 'Pets', 'Shopping',
-    'Debt'
-  ];
-  
-  for (const std of standardCategories) {
-    if (category === std) {
-      return category;
-    }
-  }
-  
-  // Convert camelCase or snake_case to Title Case with spaces
-  let formatted = category
+  // This will convert camelCase to Title Case with spaces
+  return category
     .replace(/([A-Z])/g, ' $1') // Add space before capital letters
-    .replace(/_/g, ' ') // Replace underscores with spaces
+    .replace(/^./, str => str.toUpperCase()) // Capitalize first letter
     .trim(); // Remove any leading/trailing spaces
-    
-  // Capitalize first letter and lowercase the rest of each word
-  formatted = formatted.split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
-
-  // Return the formatted category
-  return formatted;
 }
 
 // Function to categorize a transaction based on its description
@@ -185,12 +128,12 @@ export function categorizeTransaction(description: string, amount: number): stri
   for (const [category, keywords] of Object.entries(categories)) {
     if (category === 'income') continue; // Skip the income category for expense transactions
     
-    if (keywords.some(keyword => description.includes(keyword))) {
-      // Return the standardized category name
+    if (keywords.some(keyword => description.includes(keyword.toLowerCase()))) {
+      // Format the category name consistently with spaces
       return standardizeCategory(category);
     }
   }
   
   // Default category
-  return "Other";
+  return "Uncategorized Expense";
 }

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -177,7 +176,7 @@ const Dashboard = () => {
       // Calculate categories for pie chart
       const totalExpenseAmount = Object.values(expenseCategoryAmounts).reduce((sum, amount) => sum + amount, 0);
       
-      // Map expense category data for the chart (excluding any "Income" categories)
+      // Map expense category data for the chart (ensuring we exclude any "Income" categories)
       const categoryItems: CategorySummary[] = Object.entries(expenseCategoryAmounts)
         .filter(([category]) => category.toLowerCase() !== 'income')
         .map(([category, amount]) => ({
@@ -465,7 +464,9 @@ const Dashboard = () => {
           
           {/* Expense Breakdown Section */}
           <div className="mb-8">
-            <CategoryBreakdownChart categoryData={categoryData} />
+            <CategoryBreakdownChart 
+              categoryData={categoryData}
+            />
           </div>
           
           {/* Charts Section */}

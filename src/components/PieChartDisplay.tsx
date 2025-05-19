@@ -60,15 +60,21 @@ export const PieChartDisplay = ({ data }: PieChartDisplayProps) => {
     );
   };
 
+  // Additional check to ensure we don't render an empty chart
+  const filteredData = data.filter(item => 
+    item.category.toLowerCase() !== 'income' && 
+    item.amount > 0
+  );
+
   return (
     <div className="w-full h-full">
-      {data.length > 0 ? (
+      {filteredData.length > 0 ? (
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
               activeIndex={activeIndex}
               activeShape={renderActiveShape}
-              data={data}
+              data={filteredData}
               cx="50%"
               cy="50%"
               innerRadius={70}
@@ -80,7 +86,7 @@ export const PieChartDisplay = ({ data }: PieChartDisplayProps) => {
               animationDuration={300}
               animationBegin={0}
             >
-              {data.map((entry, index) => (
+              {filteredData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
               ))}
             </Pie>
