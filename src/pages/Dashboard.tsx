@@ -20,7 +20,7 @@ const Dashboard = () => {
   const { user, loading, signOut } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(isDeleting);
   
   // Data states
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
@@ -226,9 +226,19 @@ const Dashboard = () => {
       title: "Upload successful!",
       description: "Your files have been processed successfully.",
     });
-    // Refresh data
-    fetchAvailableMonths();
-    fetchMonthData(selectedMonth);
+    
+    // Force refresh data with some delay to ensure processing is complete
+    setTimeout(() => {
+      // First refresh available months to capture any new months
+      fetchAvailableMonths().then(() => {
+        // Then refresh the current month data or the most recent if available
+        if (availableMonths.length > 0) {
+          fetchMonthData(availableMonths[0].key);
+        } else {
+          fetchMonthData(selectedMonth);
+        }
+      });
+    }, 1000);
   };
   
   const handleUpdateCategory = async (transactionId: string, newCategory: string) => {

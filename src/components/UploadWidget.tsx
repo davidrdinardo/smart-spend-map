@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { v4 as uuidv4 } from 'uuid';
 import { format } from 'date-fns';
 import { processFiles, ensureStorageBucketExists } from './upload/utils';
+import { ProcessingStatus } from './upload/ProcessingStatus';
 
 interface UploadWidgetProps {
   onComplete: () => void;
@@ -19,6 +20,9 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [processingResult, setProcessingResult] = useState<string | null>(null);
+  const [processingError, setProcessingError] = useState<string | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
   
@@ -47,6 +51,56 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
     }
   }, [user, toast]);
   
+  const triggerProcessing = async (uploadId: string) => {
+    if (!user) return;
+    
+    try {
+      setUploadStatus('Processing your file...');
+      
+      const functionUrl = `${supabase.functions.getUrl('process-statement')}`;
+      
+      // Call the Supabase Edge Function to process the statements
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabase.auth.getSession().then(res => res.data.session?.access_token || '')}`
+        },
+        body: JSON.stringify({
+          fileId: uploadId,
+          userId: user.id
+        })
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Processing error: ${errorText}`);
+      }
+      
+      const result = await response.json();
+      console.log("Processing result:", result);
+      
+      if (result.success) {
+        setProcessingResult(result.message);
+        // Wait a moment before completing to show the success message
+        setTimeout(() => {
+          onComplete();
+        }, 1500);
+      } else {
+        throw new Error(result.error || "Unknown processing error");
+      }
+    } catch (error: any) {
+      console.error("Error processing file:", error);
+      setProcessingError(error.message || "Failed to process file");
+      
+      toast({
+        title: "Processing failed",
+        description: error.message || "An error occurred while processing your file",
+        variant: "destructive",
+      });
+    }
+  };
+  
   const handleUpload = async () => {
     if (!user) {
       toast({
@@ -67,6 +121,9 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
     }
     
     setUploading(true);
+    setUploadProgress(0);
+    setProcessingResult(null);
+    setProcessingError(null);
     
     try {
       // Ensure bucket exists
@@ -77,9 +134,15 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
       }
       
       // Upload each file
+      let uploadedFileIds = [];
+      
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         setUploadStatus(`Uploading ${i+1}/${files.length}: ${file.name}`);
+        
+        // Update progress for this file
+        const progressPerFile = 100 / files.length;
+        setUploadProgress(Math.min(100, progressPerFile * i));
         
         const fileExt = file.name.split('.').pop();
         const filePath = `${user.id}/${format(new Date(), 'yyyy-MM')}/${uuidv4()}.${fileExt}`;
@@ -101,7 +164,7 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
         }
         
         // Store upload metadata in the database
-        const { error: dbError } = await supabase
+        const { data, error: dbError } = await supabase
           .from('uploads')
           .insert({
             user_id: user.id,
@@ -110,7 +173,8 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
             processed: false,
             uploaded_at: new Date().toISOString(),
             statement_month: format(new Date(), 'yyyy-MM')
-          });
+          })
+          .select('id');
           
         if (dbError) {
           console.error("Database insert error:", file.name, dbError);
@@ -120,22 +184,32 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
           
           throw dbError;
         }
+        
+        // Store the upload ID for processing
+        if (data && data.length > 0) {
+          uploadedFileIds.push(data[0].id);
+        }
       }
       
       console.log("All files uploaded successfully");
+      setUploadProgress(100);
       
       toast({
         title: "Upload successful!",
         description: "Your files have been uploaded and are being processed.",
       });
       
+      // Process files one by one
+      for (const uploadId of uploadedFileIds) {
+        await triggerProcessing(uploadId);
+      }
+      
       // Clear the files
       setFiles([]);
       
-      // Notify completion
-      onComplete();
     } catch (error: any) {
       console.error("Upload error:", error);
+      setProcessingError(error.message || "An unexpected error occurred during upload");
       toast({
         title: "Upload failed",
         description: error.message || "An unexpected error occurred during upload",
@@ -143,7 +217,6 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
       });
     } finally {
       setUploading(false);
-      setUploadStatus('');
     }
   };
   
@@ -160,33 +233,40 @@ export const UploadWidget: React.FC<UploadWidgetProps> = ({ onComplete, onCancel
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <DropZone
-              isDragging={false}
-              onDragEnter={(e) => e.preventDefault()}
-              onDragLeave={(e) => e.preventDefault()}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (e.dataTransfer.files.length > 0) {
-                  processFiles(e.dataTransfer.files, setFiles);
-                }
-              }}
-              onFileInputChange={(e) => {
-                if (e.target.files?.length) {
-                  processFiles(e.target.files, setFiles);
-                }
-              }}
-            />
-            {uploadStatus && (
-              <div className="mt-4 text-sm text-gray-600">
-                {uploadStatus}
-              </div>
+            {!uploading ? (
+              <>
+                <DropZone
+                  isDragging={false}
+                  onDragEnter={(e) => e.preventDefault()}
+                  onDragLeave={(e) => e.preventDefault()}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (e.dataTransfer.files.length > 0) {
+                      processFiles(e.dataTransfer.files, setFiles);
+                    }
+                  }}
+                  onFileInputChange={(e) => {
+                    if (e.target.files?.length) {
+                      processFiles(e.target.files, setFiles);
+                    }
+                  }}
+                />
+                <FileList files={files} onRemove={(index) => {
+                  const newFiles = [...files];
+                  newFiles.splice(index, 1);
+                  setFiles(newFiles);
+                }} />
+              </>
+            ) : (
+              <ProcessingStatus 
+                status={uploadStatus}
+                uploadProgress={uploadProgress}
+                processingResult={processingResult}
+                processingError={processingError}
+                uploadedFilesCount={files.length}
+              />
             )}
-            <FileList files={files} onRemove={(index) => {
-              const newFiles = [...files];
-              newFiles.splice(index, 1);
-              setFiles(newFiles);
-            }} />
           </CardContent>
           <CardFooter className="flex justify-between">
             <button

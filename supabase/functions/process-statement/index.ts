@@ -181,14 +181,13 @@ serve(async (req) => {
           try {
             const { data: insertData, error: insertError } = await supabase
               .from('transactions')
-              .insert(batch)
-              .select();
+              .insert(batch);
               
             if (insertError) {
               console.error(`Error inserting batch ${Math.floor(i / BATCH_SIZE) + 1}:`, insertError);
             } else {
-              insertedCount += insertData?.length || 0;
-              console.log(`Successfully inserted ${insertData?.length || 0} transactions`);
+              insertedCount += batch.length;
+              console.log(`Successfully inserted ${batch.length} transactions`);
             }
           } catch (batchError) {
             console.error(`Exception in batch ${Math.floor(i / BATCH_SIZE) + 1}:`, batchError);
