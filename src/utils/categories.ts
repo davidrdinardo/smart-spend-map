@@ -7,7 +7,7 @@ export const categories = {
   
   groceries: ["grocery", "supermarket", "food", "market", "safeway", "kroger", "trader joe's", "whole foods", "aldi", "walmart", "costco", "target", "sam's club", "publix", "wegmans", "food lion", "sprouts", "meijer", "albertsons", "ralphs", "winn-dixie", "giant", "h-e-b", "farmers market", "bakery"],
   
-  diningOut: ["restaurant", "cafe", "coffee", "starbucks", "mcdonalds", "dining", "pizza", "burger", "takeout", "ubereats", "doordash", "grubhub", "seamless", "postmates", "delivery", "fast food", "denny's", "applebee's", "chili's", "olive garden", "outback", "chipotle", "panera", "subway", "wendy's", "burger king", "taco bell", "kfc", "ihop", "waffle house", "cheesecake factory", "red lobster", "buffet", "sushi", "thai", "chinese", "mexican", "italian"],
+  diningOut: ["restaurant", "cafe", "coffee", "starbucks", "mcdonalds", "dining", "pizza", "burger", "takeout", "ubereats", "doordash", "grubhub", "seamless", "postmates", "delivery", "fast food", "denny's", "applebee's", "chili's", "olive garden", "outback", "chipotle", "panera", "subway", "wendy's", "burger king", "taco bell", "kfc", "ihop", "waffle house", "cheesecake factory", "red lobster", "buffet", "sushi", "thai", "chinese", "mexican", "italian", "dining out"],
   
   transportation: [
     // Car-related
@@ -120,8 +120,13 @@ export function categorizeTransaction(description: string, amount: number): stri
     if (category === 'income') continue; // Skip the income category for expense transactions
     
     if (keywords.some(keyword => description.includes(keyword))) {
-      // Convert first letter to uppercase for category name
-      return category.charAt(0).toUpperCase() + category.slice(1);
+      // Format the category name consistently with spaces
+      // Convert camelCase to Title Case with spaces
+      const formattedCategory = category
+        .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+        .replace(/^./, str => str.toUpperCase()); // Capitalize first letter
+      
+      return formattedCategory.trim(); // Remove any leading/trailing spaces
     }
   }
   

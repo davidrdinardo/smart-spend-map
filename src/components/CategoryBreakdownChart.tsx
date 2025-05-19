@@ -32,16 +32,47 @@ interface CategoryBreakdownProps {
   categoryData: CategorySummary[];
 }
 
+// Helper function to standardize category names
+const standardizeCategory = (category: string): string => {
+  // This ensures consistent category display regardless of how it's stored in the database
+  return category
+    .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+    .replace(/^./, str => str.toUpperCase()) // Capitalize first letter
+    .trim(); // Remove any leading/trailing spaces
+};
+
 export const CategoryBreakdownChart = ({ categoryData }: CategoryBreakdownProps) => {
   const [view, setView] = useState<'percentage' | 'amount'>('percentage');
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const { toast } = useToast();
   
+  // Normalize category names to avoid duplicates like "Dining Out" and "DiningOut"
+  const normalizedCategoryData = categoryData.reduce((acc, category) => {
+    const standardName = standardizeCategory(category.category);
+    
+    // Check if this standardized category name already exists in our accumulator
+    const existingCategory = acc.find(c => standardizeCategory(c.category) === standardName);
+    
+    if (existingCategory) {
+      // If it exists, add the amount to the existing category
+      existingCategory.amount += category.amount;
+      existingCategory.percentage += category.percentage;
+    } else {
+      // Otherwise add it as a new category with the standardized name
+      acc.push({
+        ...category,
+        category: standardName
+      });
+    }
+    
+    return acc;
+  }, [] as CategorySummary[]);
+  
   // Sort categories by amount spent (highest first)
-  const sortedCategories = [...categoryData].sort((a, b) => b.amount - a.amount);
+  const sortedCategories = [...normalizedCategoryData].sort((a, b) => b.amount - a.amount);
   
   // Calculate total expenses
-  const totalExpenses = categoryData.reduce((sum, category) => sum + category.amount, 0);
+  const totalExpenses = normalizedCategoryData.reduce((sum, category) => sum + category.amount, 0);
 
   // Toggle expanded category
   const toggleCategory = (category: string) => {
