@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Transaction, MonthSummary, CategorySummary, MonthData } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { Download } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -21,6 +24,7 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   
   // Data states
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
@@ -344,6 +348,77 @@ const Dashboard = () => {
     }
   };
   
+  // New function to handle CSV download
+  const handleDownloadCSV = async () => {
+    if (!user || !selectedMonth) return;
+    
+    setIsDownloading(true);
+    
+    try {
+      // Fetch all transactions for the selected month
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('date, description, amount, type, category')
+        .eq('user_id', user.id)
+        .eq('month_key', selectedMonth)
+        .order('date', { ascending: true });
+        
+      if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        toast({
+          title: "No data to download",
+          description: "There are no transactions for the selected month.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Convert data to CSV format
+      const headers = ['date', 'description', 'amount', 'type', 'category'];
+      
+      // Create CSV content with headers
+      let csvContent = headers.join(',') + '\n';
+      
+      // Add data rows
+      data.forEach(row => {
+        const rowData = headers.map(header => {
+          const value = row[header as keyof typeof row];
+          // Handle strings that might contain commas by wrapping in quotes
+          if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
+            return `"${value.replace(/"/g, '""')}"`;
+          }
+          return value;
+        });
+        csvContent += rowData.join(',') + '\n';
+      });
+      
+      // Create a blob and download link
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `smart-spend-${selectedMonth}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast({
+        title: "CSV downloaded ✅",
+        description: `Exported ${data.length} transactions for ${selectedMonth}.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Couldn't generate CSV—please try again.",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+  
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -395,18 +470,44 @@ const Dashboard = () => {
               <p className="text-gray-600">Your financial dashboard</p>
             </div>
             <div className="flex flex-col sm:flex-row gap-4 mt-4 md:mt-0">
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Select month" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableMonths.map(month => (
-                    <SelectItem key={month.key} value={month.key}>
-                      {month.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select month" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableMonths.map(month => (
+                      <SelectItem key={month.key} value={month.key}>
+                        {month.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                {/* Download CSV Button */}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        onClick={handleDownloadCSV}
+                        isLoading={isDownloading}
+                        disabled={isDownloading || !hasTransactions}
+                      >
+                        {isDownloading ? (
+                          <span className="animate-spin">◌</span>
+                        ) : (
+                          <Download className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Download CSV for this month</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
               
               <UploadDropdown
                 onSingleUpload={() => setShowUpload(true)}
