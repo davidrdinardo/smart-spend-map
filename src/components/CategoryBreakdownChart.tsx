@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PieChartDisplay } from '@/components/PieChartDisplay';
@@ -29,7 +30,7 @@ export const CategoryBreakdownChart = ({ categoryData }: CategoryBreakdownChartP
     // Normalize category name for consistent format
     const standardName = standardizeCategory(category.category);
     
-    // Check if this standardized category name already exists in our accumulator (case-insensitive)
+    // Check if this standardized category already exists in our accumulator (case-insensitive)
     const existingCategoryIndex = acc.findIndex(c => 
       standardizeCategory(c.category).toLowerCase() === standardName.toLowerCase()
     );
