@@ -1,4 +1,3 @@
-
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -82,16 +81,15 @@ export const validateCSVHeaders = async (file: File): Promise<boolean> => {
         variant: "destructive",
       });
       
-      // Show template download toast
+      // Show template download toast without using JSX
       toast({
         title: "Need a template?",
         description: "Click here to download a sample CSV template",
-        action: <button 
-                  onClick={downloadCSVTemplate} 
-                  className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded text-xs"
-                >
-                  Download Template
-                </button>,
+        action: {
+          label: "Download Template",
+          onClick: downloadCSVTemplate,
+          className: "bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded text-xs"
+        },
         variant: "default",
       });
       

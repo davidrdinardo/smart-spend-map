@@ -1,4 +1,3 @@
-
 import * as React from "react"
 
 import type {
@@ -13,7 +12,11 @@ type ToasterToast = ToastProps & {
   id: string
   title?: React.ReactNode
   description?: React.ReactNode
-  action?: ToastActionElement
+  action?: ToastActionElement | {
+    label: string
+    onClick: () => void
+    className?: string
+  }
 }
 
 const actionTypes = {
