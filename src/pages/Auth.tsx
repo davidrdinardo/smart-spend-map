@@ -31,8 +31,7 @@ const Auth = () => {
   const [debugInfo, setDebugInfo] = useState<any>({});
   const [authError, setAuthError] = useState<string | null>(null);
   
-  // We no longer need this check as it's handled by the PublicRoute component
-  // But keep the debug logging for troubleshooting
+  // Debug logging
   useEffect(() => {
     console.log("Auth page state:", {
       user: !!user,
@@ -125,9 +124,6 @@ const Auth = () => {
             title: "Sign up successful!",
             description: "Please check your email for the confirmation link.",
           });
-          
-          // Only navigate if session exists (user is auto-confirmed)
-          // Let the PublicRoute handle redirect based on auth state
         }
       } else {
         // Sign in logic
@@ -168,11 +164,12 @@ const Auth = () => {
             description: "Welcome back!",
           });
           
-          // Explicitly navigate to dashboard on successful login
+          // Let the auth state change handle navigation
+          // We'll explicitly navigate after a brief delay to ensure state is updated
           if (signinData.session) {
             setTimeout(() => {
               navigate('/dashboard', { replace: true });
-            }, 500);
+            }, 1000);
           }
         }
       }
@@ -211,7 +208,7 @@ const Auth = () => {
 
   const handleTestRefresh = async () => {
     try {
-      // Use AuthProvider's refreshSession instead of direct Supabase call
+      // Use AuthProvider's refreshSession
       await refreshSession();
       
       // Update debug info
@@ -256,8 +253,7 @@ const Auth = () => {
     }
   };
 
-  // This is now handled by the PublicRoute wrapper in App.tsx
-  // We'll keep a minimal loading state for consistency
+  // Show a minimal loading state
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -268,9 +264,6 @@ const Auth = () => {
       </div>
     );
   }
-
-  // If user is authenticated, they'll be redirected by the PublicRoute wrapper
-  // This renders the login form
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">

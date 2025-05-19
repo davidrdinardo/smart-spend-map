@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase, checkAuthState, refreshSessionIfNeeded } from '@/integrations/supabase/client';
