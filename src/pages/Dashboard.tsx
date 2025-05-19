@@ -22,7 +22,7 @@ const Dashboard = () => {
   const { user, loading, signOut } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false); // Fixed: Initialized with false instead of itself
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // Data states
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
@@ -373,6 +373,13 @@ const Dashboard = () => {
 
   const hasTransactions = transactions.length > 0;
   const hasExpenseData = categoryData.length > 0;
+
+  console.log("Rendering dashboard with:", { 
+    hasTransactions, 
+    hasExpenseData, 
+    categoryDataLength: categoryData.length,
+    categoryData: categoryData
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
