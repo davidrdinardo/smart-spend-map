@@ -127,7 +127,14 @@ const Dashboard = () => {
       if (transactionError) throw transactionError;
       
       console.log("Fetched transactions:", transactionData?.length || 0, transactionData);
-      setTransactions(transactionData || []);
+      
+      // Apply type casting to ensure transactionData conforms to Transaction[]
+      const typedTransactions: Transaction[] = transactionData?.map(tx => ({
+        ...tx,
+        type: tx.type === 'income' ? 'income' : 'expense' // Ensure type is either 'income' or 'expense'
+      })) || [];
+      
+      setTransactions(typedTransactions);
       
       // Calculate summary for the month
       let totalIncome = 0;
@@ -135,7 +142,7 @@ const Dashboard = () => {
       
       const categoryAmounts: Record<string, number> = {};
       
-      transactionData?.forEach(tx => {
+      typedTransactions.forEach(tx => {
         if (tx.type === 'income') {
           totalIncome += Number(tx.amount);
         } else {

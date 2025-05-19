@@ -1,4 +1,5 @@
 
+
 export interface Transaction {
   id: string;
   user_id: string;
@@ -38,3 +39,4 @@ export interface MonthData {
   month_key: string;
   net: number;
 }
+
