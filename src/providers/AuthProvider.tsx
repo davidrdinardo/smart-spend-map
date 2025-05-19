@@ -161,6 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           description: error.message,
           variant: "destructive",
         });
+        return { data, error };
       } else {
         console.log("Session refreshed:", data.session?.user?.id);
         setSession(data.session);
@@ -172,6 +173,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             description: "Your session has been refreshed",
           });
         }
+        return { data, error: null };
       }
     } catch (error: any) {
       console.error("Error during manual session refresh:", error);
@@ -180,6 +182,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: error?.message || "An unexpected error occurred",
         variant: "destructive",
       });
+      return { data: null, error };
     }
   };
   

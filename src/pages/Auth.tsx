@@ -1,16 +1,17 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
-import { supabase, checkAuthState, debugSupabaseSession } from '@/integrations/supabase/client';
+import { supabase, checkAuthState, debugSupabaseSession, clearSupabaseSession } from '@/integrations/supabase/client';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertCircle, Info } from "lucide-react";
+import { AlertCircle, Info, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -23,7 +24,7 @@ const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, refreshSession } = useAuth();
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [showDebugDialog, setShowDebugDialog] = useState(false);
@@ -167,8 +168,12 @@ const Auth = () => {
             description: "Welcome back!",
           });
           
-          // No need to navigate - PublicRoute component will handle this
-          // when the auth state changes
+          // Explicitly navigate to dashboard on successful login
+          if (signinData.session) {
+            setTimeout(() => {
+              navigate('/dashboard', { replace: true });
+            }, 500);
+          }
         }
       }
     } catch (error: any) {
@@ -206,30 +211,47 @@ const Auth = () => {
 
   const handleTestRefresh = async () => {
     try {
-      const { data, error } = await supabase.auth.refreshSession();
+      // Use AuthProvider's refreshSession instead of direct Supabase call
+      await refreshSession();
       
-      if (error) {
-        console.error("Session refresh error:", error);
-        setAuthError(error.message);
-      } else {
-        console.log("Session refreshed:", data.session?.user?.id);
-        
-        setDebugInfo(prev => ({
-          ...prev,
-          refreshAttempt: {
-            timestamp: new Date().toISOString(),
-            success: !!data.session,
-            userId: data.session?.user?.id
-          }
-        }));
-        
-        toast({
-          title: "Session refresh attempt",
-          description: data.session ? "Session refreshed successfully" : "No active session to refresh",
-        });
-      }
+      // Update debug info
+      const authState = await checkAuthState();
+      setDebugInfo(prev => ({
+        ...prev,
+        refreshAttempt: {
+          timestamp: new Date().toISOString(),
+          authState
+        }
+      }));
+      
+      toast({
+        title: "Session refresh attempt",
+        description: "Session refresh attempted via AuthProvider",
+      });
     } catch (error: any) {
       console.error("Test refresh failed:", error);
+      setAuthError(error?.message || "An unexpected error occurred");
+    }
+  };
+
+  const handleClearSession = async () => {
+    try {
+      // Clear session from storage
+      const cleared = clearSupabaseSession();
+      
+      if (cleared) {
+        toast({
+          title: "Session cleared",
+          description: "Local session data has been removed",
+        });
+        
+        // Force page reload to reset state
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      }
+    } catch (error: any) {
+      console.error("Failed to clear session:", error);
       setAuthError(error?.message || "An unexpected error occurred");
     }
   };
@@ -346,8 +368,16 @@ const Auth = () => {
                   className="text-xs text-gray-400 flex items-center gap-1 hover:underline"
                   onClick={handleTestRefresh}
                 >
-                  <AlertCircle size={12} />
+                  <RefreshCw size={12} />
                   Test Refresh
+                </button>
+                <button
+                  type="button"
+                  className="text-xs text-gray-400 flex items-center gap-1 hover:underline"
+                  onClick={handleClearSession}
+                >
+                  <AlertCircle size={12} />
+                  Clear Session
                 </button>
               </div>
             </form>
