@@ -158,23 +158,51 @@ export const TransactionTable = ({ transactions, onUpdateCategory }: Transaction
                           <DropdownMenuLabel>Select Category</DropdownMenuLabel>
                           <DropdownMenuSeparator />
                           <div className="max-h-[300px] overflow-y-auto">
-                            {categoryGroups.map((categoryGroup) => {
-                              // Format category group name for display (e.g., "diningOut" -> "Dining Out")
-                              const formattedCategoryName = categoryGroup === 'Income' 
-                                ? 'Income' 
-                                : categoryGroup
-                                    .replace(/([A-Z])/g, ' $1')
-                                    .replace(/^./, (str) => str.toUpperCase());
-                              
-                              return (
-                                <DropdownMenuItem 
-                                  key={categoryGroup}
-                                  onClick={() => handleCategoryUpdate(transaction.id, formattedCategoryName)}
-                                >
-                                  {formattedCategoryName}
-                                </DropdownMenuItem>
-                              );
-                            })}
+                            {/* Add the dedicated Income option */}
+                            <DropdownMenuItem 
+                              key="Income"
+                              onClick={() => handleCategoryUpdate(transaction.id, "Income")}
+                            >
+                              Income
+                            </DropdownMenuItem>
+                            
+                            <DropdownMenuSeparator />
+                            
+                            {/* Add Uncategorized Expense at the top of expense categories */}
+                            <DropdownMenuItem 
+                              key="UncategorizedExpense"
+                              onClick={() => handleCategoryUpdate(transaction.id, "Uncategorized Expense")}
+                            >
+                              Uncategorized Expense
+                            </DropdownMenuItem>
+                            
+                            {/* Add Bank Fees category */}
+                            <DropdownMenuItem 
+                              key="BankFees"
+                              onClick={() => handleCategoryUpdate(transaction.id, "Bank Fees")}
+                            >
+                              Bank Fees
+                            </DropdownMenuItem>
+                            
+                            {/* Add all other expense categories */}
+                            {Object.keys(categories)
+                              .filter(cat => cat !== 'income' && cat !== 'uncategorizedExpense' && cat !== 'bankFees')
+                              .map(categoryGroup => {
+                                // Format category group name for display (e.g., "diningOut" -> "Dining Out")
+                                const formattedCategoryName = categoryGroup
+                                  .replace(/([A-Z])/g, ' $1')
+                                  .replace(/^./, (str) => str.toUpperCase());
+                                
+                                return (
+                                  <DropdownMenuItem 
+                                    key={categoryGroup}
+                                    onClick={() => handleCategoryUpdate(transaction.id, formattedCategoryName)}
+                                  >
+                                    {formattedCategoryName}
+                                  </DropdownMenuItem>
+                                );
+                              })
+                            }
                           </div>
                         </DropdownMenuContent>
                       </DropdownMenu>

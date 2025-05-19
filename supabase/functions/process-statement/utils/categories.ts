@@ -99,7 +99,11 @@ export const categories = {
   
   savings: ["savings", "investment", "401k", "ira", "roth", "etf", "stock", "bond", "mutual fund", "retirement", "brokerage", "fidelity", "vanguard", "charles schwab", "robinhood", "coinbase", "crypto", "bitcoin", "transfer to savings"],
   
-  debt: ["loan payment", "credit card payment", "student loan", "debt", "principal", "interest", "financing", "installment", "lending", "credit", "chase", "bank of america", "wells fargo", "citibank", "capital one", "discover", "amex", "american express", "loan servicing"]
+  debt: ["loan payment", "credit card payment", "student loan", "debt", "principal", "interest", "financing", "installment", "lending", "credit", "chase", "bank of america", "wells fargo", "citibank", "capital one", "discover", "amex", "american express", "loan servicing"],
+  
+  bankFees: ["fee", "service charge", "overdraft", "late fee", "wire transfer fee", "atm fee", "foreign transaction fee", "monthly maintenance fee", "insufficient funds", "annual fee", "minimum balance fee", "checking fee", "bank fee", "administration fee", "processing fee"],
+  
+  uncategorizedExpense: []
 };
 
 // Function to categorize a transaction based on its description
@@ -122,5 +126,5 @@ export function categorizeTransaction(description: string, amount: number): stri
   }
   
   // Default category
-  return "Other";
+  return "Uncategorized Expense";
 }
