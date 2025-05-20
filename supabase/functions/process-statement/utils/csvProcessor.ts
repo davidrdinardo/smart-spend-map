@@ -1,6 +1,6 @@
-
 import { parseCSVLine, detectHeaderColumns, parseDate, parseAmount } from "./parsers.ts";
 import { categorizeWithAI } from "./aiCategorizer.ts";
+import { categorizeTransaction } from "./categories.ts";
 
 export async function processCSVData(
   text: string, 
@@ -207,64 +207,20 @@ export async function processCSVData(
       }
       existingTransactions.add(transactionKey);
       
-      // Set default category
-      let category = type === 'income' ? 'Income' : 'Other';
-      
-      // Only use AI for categorizing expenses
-      if (type === 'expense') {
+      // Use rule-based categorization first as a fallback
+      let category = type === 'income' ? 'Income' : categorizeTransaction(description, isExpense ? -amount : amount);
+    
+      // Only use AI for categorizing expenses if rule-based categorization returned "Uncategorized Expense"
+      if (type === 'expense' && (category === 'Uncategorized Expense' || category === 'Other')) {
         try {
           const aiCategory = await categorizeWithAI(description, -amount);
           // Make sure we're getting a valid category from AI
           if (aiCategory && aiCategory.trim() !== '' && aiCategory.toLowerCase() !== 'income') {
             category = aiCategory;
-          } else {
-            // Fall back to rule-based categorization if AI returns "Income" for an expense
-            const lowerDesc = description.toLowerCase();
-            // Check if it's a transfer or bank-related transaction
-            if (lowerDesc.includes('transfer') || 
-                lowerDesc.includes('e-transfer') || 
-                lowerDesc.includes('bank') || 
-                lowerDesc.includes('cibc') || 
-                lowerDesc.includes('deposit')) {
-              if (!lowerDesc.includes('grocery') && !lowerDesc.includes('food') && !lowerDesc.includes('restaurant')) {
-                if (type === 'expense') {
-                  category = 'Banking & Transfers';
-                }
-              }
-            }
-            // Check for groceries or food
-            else if (lowerDesc.includes('farm boy') || 
-                    lowerDesc.includes('grocery') || 
-                    lowerDesc.includes('supermarket') || 
-                    lowerDesc.includes('food')) {
-              category = 'Groceries';
-            }
-            // Check for dining
-            else if (lowerDesc.includes('restaurant') || 
-                    lowerDesc.includes('dining') || 
-                    lowerDesc.includes('cafe') || 
-                    lowerDesc.includes('diner') || 
-                    lowerDesc.includes('mcdonald')) {
-              category = 'Dining Out';
-            }
-            // Check for transportation
-            else if (lowerDesc.includes('gas') || 
-                    lowerDesc.includes('petro') || 
-                    lowerDesc.includes('uber') || 
-                    lowerDesc.includes('taxi')) {
-              category = 'Transportation';
-            }
-            // Shopping
-            else if (lowerDesc.includes('retail purchase')) {
-              category = 'Shopping';
-            }
-            else {
-              category = 'Other';
-            }
           }
         } catch (error) {
           console.error(`Error using AI to categorize: ${error.message}`);
-          // Default category will be used
+          // Default category from rule-based categorization will be used
         }
       }
       
