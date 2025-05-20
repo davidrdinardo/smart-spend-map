@@ -142,12 +142,13 @@ serve(async (req) => {
         
         // Prepare transactions for batch categorization
         for (const tx of validTransactions) {
+          const isExpense = tx.amount < 0;
           rawTransactions.push({
             user_id: userId,
             date: tx.date,
             description: tx.description,
-            amount: tx.amount,
-            type: tx.amount >= 0 ? 'income' : 'expense',
+            amount: Math.abs(tx.amount),
+            type: isExpense ? 'expense' : 'income',
             source_upload_id: fileId,
             month_key: monthKey,
             forAI: { description: tx.description, amount: tx.amount }
@@ -177,7 +178,7 @@ serve(async (req) => {
         for (const tx of csvTransactions) {
           rawTransactions.push({
             ...tx,
-            forAI: { description: tx.description, amount: tx.amount }
+            forAI: { description: tx.description, amount: tx.amount * (tx.type === 'expense' ? -1 : 1) }
           });
         }
       } catch (error) {
@@ -239,11 +240,14 @@ serve(async (req) => {
           
           // Assign categories to transactions
           for (let i = 0; i < batch.length; i++) {
-            if (categories[i]) {
+            // Use the appropriate category based on transaction type
+            if (batch[i].type === 'income') {
+              batch[i].category = 'Income';
+            } else if (categories[i]) {
               batch[i].category = categories[i];
             } else {
-              // Fallback if category wasn't returned
-              batch[i].category = batch[i].type === 'income' ? 'Income' : 'Other';
+              // Fallback if category wasn't returned for expense
+              batch[i].category = 'Uncategorized Expense';
             }
             
             // Remove the forAI field before insertion
@@ -287,9 +291,20 @@ serve(async (req) => {
               // Remove the forAI property before insertion
               const { forAI, ...transactionToInsert } = tx;
               
-              // Get category for this single transaction
-              const category = await categorizeWithAI(tx.description, tx.amount);
-              transactionToInsert.category = category;
+              // Ensure income transactions are categorized as "Income"
+              if (transactionToInsert.type === 'income') {
+                transactionToInsert.category = 'Income';
+              } else {
+                // Get category for expense transactions
+                transactionToInsert.category = await categorizeWithAI(tx.description, -Math.abs(tx.amount));
+                
+                // If AI categorization failed or returned "Income" for an expense, use "Uncategorized Expense"
+                if (!transactionToInsert.category || 
+                    transactionToInsert.category.trim() === '' || 
+                    transactionToInsert.category.toLowerCase() === 'income') {
+                  transactionToInsert.category = 'Uncategorized Expense';
+                }
+              }
               
               const { data, error } = await supabase
                 .from('transactions')

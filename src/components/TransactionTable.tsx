@@ -1,4 +1,3 @@
-
 import { useState, useMemo } from 'react';
 import { 
   Table, 
@@ -50,9 +49,6 @@ export const TransactionTable = ({ transactions, onUpdateCategory }: Transaction
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const ROWS_PER_PAGE = 50;
-  
-  // Get all expense categories from categories.ts plus Income
-  const categoryGroups = ['Income', ...Object.keys(categories).filter(cat => cat !== 'income')];
   
   // Filter transactions based on search term
   const filteredTransactions = useMemo(() => 
