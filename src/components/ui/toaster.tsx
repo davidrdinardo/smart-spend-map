@@ -30,6 +30,7 @@ export function Toaster() {
                 ? <ToastAction 
                     className={action.className} 
                     onClick={action.onClick}
+                    altText={action.label}
                   >
                     {action.label}
                   </ToastAction>
