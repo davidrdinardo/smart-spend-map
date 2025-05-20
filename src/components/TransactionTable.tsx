@@ -1,3 +1,4 @@
+
 import { useState, useMemo } from 'react';
 import { 
   Table, 
@@ -225,7 +226,7 @@ export const TransactionTable = ({ transactions, onUpdateCategory }: Transaction
                             <DropdownMenuLabel>Select Category</DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             <div className="max-h-[300px] overflow-y-auto">
-                              {/* Add the Income option (only show for Expense type items if they need to be changed) */}
+                              {/* Add the Income option */}
                               <DropdownMenuItem 
                                 key="Income"
                                 onClick={() => handleCategoryUpdate(transaction.id, "Income")}
